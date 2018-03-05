@@ -132,16 +132,7 @@ void *little_latency_wrapper(void *arg)
     rc = kp_local_get(local, key.c_str(), (void **)&result, &size);
     if (rc)
         std::cout << "status code: " << rc << std::endl;
-    else {
-        std::string result_str{result};
-        std::cout << "key: " << key.substr(0, 3) << "..." << std::endl;
-        std::cout << "result: " << result_str << std::endl;
-        // std::cout << "result: " << result_str.substr(0, 3) << "..." << result_str.substr(result_str.size() - 3) << std::endl;
-        std::cout << "expect: " << value << std::endl;
-        // std::cout << "expected: " << value.substr(0, 3) << "..." << value.substr(value.size() - 3) << std::endl;
-        std::cout << std::boolalpha;
-        std::cout << "equal: " << (value == result_str) << std::endl;
-    }
+    
     // // Insert/update a key
     // const char *key;
     // const char *value;
@@ -181,8 +172,10 @@ int run(program_args* pargs)
     if (!pargs->data_file.empty())
         pairs = fetch_data(pargs->data_file);
 
-    for (auto [key, val] : pairs)
-        std::cout << key.substr(0,3) << "..." << " -> " << val.substr(0,3) << "..." << '\n';
+    for (auto [key, val] : pairs) {
+        std::cout << key.substr(0,3) << "..." << key.substr(key.size() - 3);
+        std::cout << " -> " << val.substr(0,3) << "..." << val.substr(val.size() - 3) << '\n';
+    }
 
     const char* path = PERSISTENT_HEAP;
     void *pmp;
