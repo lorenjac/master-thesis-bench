@@ -1,4 +1,8 @@
 #include <iostream>
+#include <vector>
+#include <fstream>
+#include <stdexcept>
+#include <getopt.h>
 
 #define PERSISTENT_HEAP "/dev/shm/efile"
 
@@ -17,26 +21,71 @@ extern "C" {
 #define MASTER_EXPECTED_MAX_NO_KEYS 512
 #define LOCAL_EXPECTED_MAX_NO_KEYS 512
 
-typedef struct random_ints_ {
-  int *array;
-  unsigned int count;
-  unsigned int idx;
-} random_ints;
+struct program_args {
+    std::string opcode;
+    std::string data_file;
+    std::size_t num_repeats = 1000;
+    std::string unit = "ns";
+    bool verbose = false;
+};
+
+using kvpair_t = std::pair<std::string, std::string>;
+
+// typedef struct random_ints_ {
+//   int *array;
+//   unsigned int count;
+//   unsigned int idx;
+// } random_ints;
 
 /* Structure to push arguments to the worker */
 typedef struct benchmark_args_struct {
     cpu_set_t cpu_set;
     void *master;
-    int num_threads;
-    int starting_ops;
-    pthread_cond_t *bench_cond;
-    pthread_mutex_t *bench_mutex;
-    bool slam_local;
-    bool split_keys;
-    int my_id;
-    bool do_measure;
-    random_ints *ints;
+    program_args *pargs;
+    std::vector<kvpair_t> *pairs;
+    // int num_threads;
+    // int starting_ops;
+    // pthread_cond_t *bench_cond;
+    // pthread_mutex_t *bench_mutex;
+    // bool slam_local;
+    // bool split_keys;
+    // int my_id;
+    // bool do_measure;
+    // random_ints *ints;
 } benchmark_thread_args;
+
+
+std::vector<kvpair_t> fetch_data(std::string path)
+{
+    std::ifstream ifs{path};
+    if (!ifs.is_open())
+        return {};
+
+    std::string line;
+    // std::getline(ifs, line);
+    // std::size_t key_size = std::stoi(line);
+    // std::getline(ifs, line);
+    // std::size_t val_size = std::stoi(line);
+    // std::getline(ifs, line);
+    // std::size_t num_pairs = std::stoi(line);
+
+    std::vector<kvpair_t> pairs;
+    while (std::getline(ifs, line)) {
+        if (!line.empty()) {
+            auto pos = line.find(';');
+            if (pos != std::string::npos) {
+                pairs.emplace_back(
+                    line.substr(0, pos),
+                    line.substr(pos + 1)
+                );
+            }
+            else {
+                throw std::invalid_argument("error: missing delimiter (;) in line");
+            }
+        }
+    }
+    return pairs;
+}
 
 /* Packages up single threaded evaluations so we can use it from within
    a single worker setup */
@@ -49,9 +98,27 @@ void *little_latency_wrapper(void *arg)
 
     /* Create worker */
     kp_kv_local *local;
-    int rc = kp_kv_local_create(master, &local, 256, false);
+    int rc = kp_kv_local_create(master, &local, LOCAL_EXPECTED_MAX_NO_KEYS, false);
     if(rc != 0)
         kp_die("thread_%lu: kp_kv_local_create() returned error=%d\n", tid, rc);
+
+    // ########################################################################
+    // Populate store
+    // ########################################################################
+
+    PM_START_TX();
+    auto& pairs = *thread_args->pairs;
+    for (auto [key, value] : pairs) {
+        rc = kp_local_put(local, key.c_str(), value.c_str(), value.size());
+        if (rc)
+            std::cout << "status code: " << rc << std::endl;
+    }
+    rc = kp_local_commit(local, NULL);
+    PM_END_TX();
+
+    // ########################################################################
+    // Perform operation
+    // ########################################################################
 
     // Retrieve a key
     // char *key;
@@ -59,6 +126,22 @@ void *little_latency_wrapper(void *arg)
     // size_t* size;
     // rc = kp_local_get(local, key, (void **)value, size);
 
+    auto [key, value] = thread_args->pairs->at(0);
+    char* result;
+    size_t size;
+    rc = kp_local_get(local, key.c_str(), (void **)&result, &size);
+    if (rc)
+        std::cout << "status code: " << rc << std::endl;
+    else {
+        std::string result_str{result};
+        std::cout << "key: " << key.substr(0, 3) << "..." << std::endl;
+        std::cout << "result: " << result_str << std::endl;
+        // std::cout << "result: " << result_str.substr(0, 3) << "..." << result_str.substr(result_str.size() - 3) << std::endl;
+        std::cout << "expect: " << value << std::endl;
+        // std::cout << "expected: " << value.substr(0, 3) << "..." << value.substr(value.size() - 3) << std::endl;
+        std::cout << std::boolalpha;
+        std::cout << "equal: " << (value == result_str) << std::endl;
+    }
     // // Insert/update a key
     // const char *key;
     // const char *value;
@@ -92,8 +175,15 @@ void *little_latency_wrapper(void *arg)
     return (void *) ret_string;
 }
 
-int main()
+int run(program_args* pargs)
 {
+    std::vector<kvpair_t> pairs;
+    if (!pargs->data_file.empty())
+        pairs = fetch_data(pargs->data_file);
+
+    for (auto [key, val] : pairs)
+        std::cout << key.substr(0,3) << "..." << " -> " << val.substr(0,3) << "..." << '\n';
+
     const char* path = PERSISTENT_HEAP;
     void *pmp;
     if ((pmp = pmemalloc_init(path, (size_t)PMSIZE)) == NULL) {
@@ -138,6 +228,8 @@ int main()
         std::cout << "error: master store could not be created!\n";
 
     thread_args.master = master;
+    thread_args.pargs = pargs;
+    thread_args.pairs = &pairs;
 
     /* Start thread */
     rc = pthread_create(&thread, &attr, &little_latency_wrapper, (void *)(&thread_args));
@@ -159,6 +251,103 @@ int main()
     rc = pthread_attr_destroy(&attr);
     if(rc != 0)
         kp_die("pthread_attr_destroy() returned error=%d\n", rc);
+
+    return 0;
+}
+
+void usage()
+{
+    std::cout << "NAME\n";
+    std::cout << "\tbaseline - determine average operation latency\n";
+    std::cout << "\nSYNOPSIS\n";
+    std::cout << "\tbaseline opcode [options]\n";
+    std::cout << "\nDESCRIPTION\n";
+    std::cout << "\tbaseline is used to determine the average latency of of single database\n";
+    std::cout << "\toperations. opcode denotes the operation to be measured and is a required\n";
+    std::cout << "\targument. options may be used to configure the measurement but are not required.\n";
+    std::cout << "\nOPTIONS\n";
+    std::cout << "\t-p, --populate FILE\n";
+    std::cout << "\t\tPopulates the database with data from the specified file.\n";
+    std::cout << "\t-r, --repeats NUM\n";
+    std::cout << "\t\tSets the number of repetitions for the given operation.\n";
+    std::cout << "\t-u, --unit UNIT\n";
+    std::cout << "\t\tSets the time unit of used when printing results. Can be one of {s | ms | us | ns}.\n";
+    std::cout << "\t-v, --verbose\n";
+    std::cout << "\t\tEnables verbose mode. With this, all intermediate results will be shown.\n";
+}
+
+void parse_args(int argc, char* argv[], program_args& pargs)
+{
+    pargs.opcode = argv[1];
+    if (pargs.opcode != "get"
+            && pargs.opcode != "put"
+            && pargs.opcode != "ins"
+            && pargs.opcode != "del") {
+        usage();
+        exit(0);
+    }
+    ++optind;
+
+    static struct option longopts[] = {
+        { "repeats"  , required_argument , NULL , 'r' },
+        { "populate" , required_argument , NULL , 'p' },
+        { "unit"     , required_argument , NULL , 'u' },
+        { "verbose"  , no_argument       , NULL , 'v' },
+        { NULL       , 0                 , NULL , 0 }
+    };
+
+    char ch;
+    while ((ch = getopt_long(argc, argv, "r:p:u:v", longopts, NULL)) != -1) {
+        switch (ch) {
+        case 'r':
+            pargs.num_repeats = std::stoll(optarg);
+            break;
+
+        case 'p':
+            pargs.data_file = optarg;
+            break;
+
+        case 'u':
+            pargs.unit = optarg;
+            break;
+
+        case 'v':
+            pargs.verbose = true;
+            break;
+
+        // case 0:
+        //     break;
+
+        default:
+            usage();
+            exit(0);
+        }
+    }
+    argc -= optind;
+    argv += optind;
+}
+
+void print_args(program_args& pargs)
+{
+    std::cout << std::boolalpha;
+    std::cout << "opcode  : " << pargs.opcode << std::endl;
+    std::cout << "repeats : " << pargs.num_repeats << std::endl;
+    std::cout << "datafile: " << pargs.data_file << std::endl;
+    std::cout << "unit    : " << pargs.unit << std::endl;
+    std::cout << "verbose : " << pargs.verbose << std::endl;
+}
+
+int main(int argc, char* argv[])
+{
+    if (argc < 2) {
+        usage();
+        exit(0);
+    }
+
+    program_args pargs;
+    parse_args(argc, argv, pargs);
+    print_args(pargs);
+    run(&pargs);
 
     return 0;
 }
