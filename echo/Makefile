@@ -1,0 +1,29 @@
+# Compiler Flags
+
+CC=g++
+CFLAGS=-Wall -O2
+
+# Inputs
+
+ECHO_HOME=lib/echo/echo
+INCLUDE=-I $(ECHO_HOME)/include -I $(ECHO_HOME)/src
+SRC_DIR=src
+
+LIB_DIR=-L $(ECHO_HOME)/lib
+LIBS=-lkp_kvstore -pthread
+LDFLAGS=$(LIB_DIR) $(LIBS)
+
+# Artifacts
+
+BIN_DIR=bin
+
+# Targets
+
+all : baseline
+
+baseline :
+	$(CC) -c $(CFLAGS) $(INCLUDE) $(SRC_DIR)/$@.cpp -o $(BIN_DIR)/$@.o
+	$(CC) $(CFLAGS) $(BIN_DIR)/$@.o $(LDFLAGS) -o $(BIN_DIR)/$@
+
+clean :
+	rm -rf bin/*
