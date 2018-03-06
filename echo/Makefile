@@ -10,8 +10,11 @@ INCLUDE=-I $(ECHO_HOME)/include -I $(ECHO_HOME)/src
 SRC_DIR=src
 
 LIB_DIR=-L $(ECHO_HOME)/lib
-LIBS=-lkp_kvstore -pthread
-LDFLAGS=$(LIB_DIR) $(LIBS)
+#LIBS=-lkp_kvstore -pthread
+#LDFLAGS=$(LIB_DIR) $(LIBS)
+STATIC_LIBS=-lkp_kvstore
+DYNAMIC_LIBS=-pthread
+LDFLAGS=$(LIB_DIR) -Wl,-Bstatic $(STATIC_LIBS) -Wl,-Bdynamic $(DYNAMIC_LIBS)
 
 # Artifacts
 
