@@ -1,8 +1,14 @@
-#include <iostream>
-#include <vector>
-#include <fstream>
-#include <stdexcept>
-#include <getopt.h>
+#include <iostream> // std::cout, std::endl
+#include <iomanip>  // std::setw, std::setfill
+#include <vector>   // std::vector
+#include <fstream>  // std::ifstream
+#include <chrono>   // std::chrono::high_resolution_clock, std::chrono::duration
+#include <cmath>    // std::ceil, std::log10
+#include <algorithm>// std::min_element, std::max_element
+#include <random>   // std::random_device, std::uniform_int_distribution
+#include <stdexcept>// std::invalid_argument
+
+#include <getopt.h> // getopt_long
 
 #define PERSISTENT_HEAP "/dev/shm/efile"
 
@@ -25,7 +31,7 @@ struct program_args {
     std::string opcode;
     std::string data_file;
     std::size_t num_repeats = 1000;
-    std::string unit = "ns";
+    std::string unit = "s";
     bool verbose = false;
 };
 
@@ -87,6 +93,145 @@ std::vector<kvpair_t> fetch_data(std::string path)
     return pairs;
 }
 
+void measure_empty_store(kp_kv_local *local, benchmark_thread_args* args, std::vector<std::chrono::duration<double>>& latencies)
+{
+
+}
+
+void measure_populated_store(kp_kv_local *local, benchmark_thread_args* thread_args, std::vector<std::chrono::duration<double>>& latencies)
+{
+    const auto& pairs = *thread_args->pairs;
+    const auto& opcode = thread_args->pargs->opcode;
+    const auto& num_repeats = thread_args->pargs->num_repeats;
+
+    latencies.reserve(num_repeats);
+
+    std::random_device rand_dev;
+    std::mt19937 rng(rand_dev());
+    std::uniform_int_distribution<> dist(0, pairs.size() - 1); // use: dist(rng)
+
+    if (opcode == "get") {
+        int rc;
+        for (size_t i=0; i<num_repeats; ++i) {
+            const auto& [_key, _val] = pairs[dist(rng)];
+            (void)_val;
+            if (thread_args->pargs->verbose) {
+                std::cout << "get(\n";
+                std::cout << "\tkey = " << _key << '\n';
+                std::cout << ")\n";
+            }
+            const char* key = _key.c_str();
+            char* val;
+            std::size_t siz;
+            auto start = std::chrono::high_resolution_clock::now();
+            rc = kp_local_get(local, key, (void**)&val, &siz);
+            (void)rc;
+            auto end = std::chrono::high_resolution_clock::now();
+            latencies.emplace_back(end - start);
+
+            // FIXME produces a memory leak: 'val' is never free'ed before going out of scope (which heap is it on???)
+            // TODO figure out when to commit {never, always, once, ...}
+        }
+    }
+    else if (opcode == "put") {
+        int rc;
+        for (size_t i=0; i<num_repeats; ++i) {
+            const auto& [_key, _val] = pairs[dist(rng)];
+            if (thread_args->pargs->verbose) {
+                std::cout << "put(\n";
+                std::cout << "\tkey = " << _key << '\n';
+                std::cout << "\tval = " << _val << '\n';
+                std::cout << ")\n";
+            }
+            const char* key = _key.c_str();
+            const char* val = _val.c_str();
+            const std::size_t siz = _val.size();
+            auto start = std::chrono::high_resolution_clock::now();
+            rc = kp_local_put(local, key, val, siz);
+            (void)rc;
+            auto end = std::chrono::high_resolution_clock::now();
+            latencies.emplace_back(end - start);
+
+            // TODO figure out when to commit {never, always, once, ...}
+        }
+    }
+    else if (opcode == "ins") {
+        // TODO do I need this?
+    }
+    else if (opcode == "del") {
+        // TODO do I need this?
+        // // Delete a key
+        // char *key;
+        // rc = kp_local_delete_key(local, key);
+    }
+
+    // // Starting a transaction
+    // // Note: Transactions are always started implicitly for each local store
+    // // But we still have to start a NVM transaction here
+    // PM_START_TX();
+
+    // // Committing a transaction
+    // rc = kp_local_commit(local, NULL);
+    // PM_END_TX();
+}
+
+void measure(kp_kv_local *local, benchmark_thread_args* thread_args, std::vector<std::chrono::duration<double>>& latencies)
+{
+    if (thread_args->pairs->empty())
+        measure_empty_store(local, thread_args, latencies);
+    else
+        measure_populated_store(local, thread_args, latencies);
+}
+
+double convert_duration(std::chrono::duration<double> dur, const std::string& unit = "")
+{
+    if (unit == "ms")
+        return std::chrono::duration<double, std::milli>{dur}.count();
+
+    if (unit == "us")
+        return std::chrono::duration<double, std::micro>(dur).count();
+
+    if (unit == "ns")
+        return std::chrono::duration<double, std::nano>(dur).count();
+
+    return dur.count();
+}
+
+void evaluate(benchmark_thread_args* thread_args, const std::vector<std::chrono::duration<double>>& latencies)
+{
+    const auto unit = thread_args->pargs->unit;
+    if (thread_args->pargs->verbose) {
+        std::cout << "--------------------------------------------------\n";
+        size_t index_width = std::ceil(std::log10(latencies.size()));
+        for (std::size_t i=0; i<latencies.size(); i++) {
+            std::cout << std::setw(index_width) << std::setfill('0') << i;
+            std::cout << ": " << convert_duration(latencies[i], unit) << unit << std::endl;
+        }
+    }
+
+    std::cout << "--------------------------------------------------\n";
+
+    auto min = std::min_element(std::begin(latencies), std::end(latencies));
+    auto max = std::max_element(std::begin(latencies), std::end(latencies));
+    std::cout << "min: " << convert_duration(*min, unit) << unit << std::endl;
+    std::cout << "max: " << convert_duration(*max, unit) << unit << std::endl;
+
+    auto size = latencies.size();
+    if (size % 2) {
+        std::cout << "med: " << convert_duration(latencies[size / 2], unit) << unit << std::endl;
+    }
+    else {
+        auto lower = latencies[size / 2 - 1];
+        auto upper = latencies[size / 2];
+        std::cout << "med: " << convert_duration((lower + upper) / 2, unit) << unit << std::endl;
+    }
+
+    std::chrono::duration<double> sum;
+    for (const auto v : latencies)
+        sum += v;
+    std::cout << "avg: " << convert_duration(sum / latencies.size(), unit) << unit << std::endl;
+}
+
 /* Packages up single threaded evaluations so we can use it from within
    a single worker setup */
 void *little_latency_wrapper(void *arg)
@@ -106,51 +251,34 @@ void *little_latency_wrapper(void *arg)
     // Populate store
     // ########################################################################
 
-    PM_START_TX();
     auto& pairs = *thread_args->pairs;
-    for (auto [key, value] : pairs) {
-        rc = kp_local_put(local, key.c_str(), value.c_str(), value.size());
-        if (rc)
+    if (pairs.size()) {
+        PM_START_TX();
+        for (auto [key, value] : pairs) {
+            rc = kp_local_put(local, key.c_str(), value.c_str(), value.size());
+            if (rc)
             std::cout << "status code: " << rc << std::endl;
+        }
+        rc = kp_local_commit(local, NULL);
+        PM_END_TX();
     }
-    rc = kp_local_commit(local, NULL);
-    PM_END_TX();
 
     // ########################################################################
-    // Perform operation
+    // Measure operation latency
     // ########################################################################
 
-    // Retrieve a key
-    // char *key;
-    // char **value;
-    // size_t* size;
-    // rc = kp_local_get(local, key, (void **)value, size);
+    std::vector<std::chrono::duration<double>> latencies;
+    measure(local, thread_args, latencies);
 
-    auto [key, value] = thread_args->pairs->at(0);
-    char* result;
-    size_t size;
-    rc = kp_local_get(local, key.c_str(), (void **)&result, &size);
-    if (rc)
-        std::cout << "status code: " << rc << std::endl;
-    
-    // // Insert/update a key
-    // const char *key;
-    // const char *value;
-    // const size_t size;
-    // rc = kp_local_put(local, key, value, size);
+    // ########################################################################
+    // Evaluate results
+    // ########################################################################
 
-    // // Delete a key
-    // char *key;
-    // rc = kp_local_delete_key(local, key);
+    evaluate(thread_args, latencies);
 
-    // // Starting a transaction
-    // // Note: Transactions are always started implicitly for each local store
-    // // But we still have to start a NVM transaction here
-    // PM_START_TX();
-
-    // // Committing a transaction
-    // rc = kp_local_commit(local, NULL);
-    // PM_END_TX();
+    // ########################################################################
+    // End benchmark
+    // ########################################################################
 
     /* Destroy worker */
     kp_kv_local_destroy(&local);
@@ -172,10 +300,10 @@ int run(program_args* pargs)
     if (!pargs->data_file.empty())
         pairs = fetch_data(pargs->data_file);
 
-    for (auto [key, val] : pairs) {
-        std::cout << key.substr(0,3) << "..." << key.substr(key.size() - 3);
-        std::cout << " -> " << val.substr(0,3) << "..." << val.substr(val.size() - 3) << '\n';
-    }
+    // for (auto [key, val] : pairs) {
+    //     std::cout << key.substr(0,3) << "..." << key.substr(key.size() - 3);
+    //     std::cout << " -> " << val.substr(0,3) << "..." << val.substr(val.size() - 3) << '\n';
+    // }
 
     const char* path = PERSISTENT_HEAP;
     void *pmp;

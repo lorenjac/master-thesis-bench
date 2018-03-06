@@ -1,6 +1,6 @@
 # Compiler Flags
 
-CC=g++
+CC=g++ -std=c++1z
 CFLAGS=-Wall -O2
 
 # Inputs
