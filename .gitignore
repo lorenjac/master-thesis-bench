@@ -1,3 +1,5 @@
 echo/bin
 echo/lib
+midas/bin
+midas/lib
 dat/
