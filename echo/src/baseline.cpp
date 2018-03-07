@@ -24,8 +24,8 @@ extern "C" {
 #define NUM_CPUS 2
 #define CPU_OFFSET 0
 #define RET_STRING_LEN 64
-#define MASTER_EXPECTED_MAX_NO_KEYS 512
-#define LOCAL_EXPECTED_MAX_NO_KEYS 512
+#define MASTER_EXPECTED_MAX_NO_KEYS 1024
+#define LOCAL_EXPECTED_MAX_NO_KEYS 1024
 
 struct program_args {
     std::string opcode;
@@ -60,7 +60,6 @@ typedef struct benchmark_args_struct {
     // random_ints *ints;
 } benchmark_thread_args;
 
-
 std::vector<kvpair_t> fetch_data(std::string path)
 {
     std::ifstream ifs{path};
@@ -78,11 +77,11 @@ std::vector<kvpair_t> fetch_data(std::string path)
     std::vector<kvpair_t> pairs;
     while (std::getline(ifs, line)) {
         if (!line.empty()) {
-            auto pos = line.find(';');
-            if (pos != std::string::npos) {
+            auto pos_delim = line.find(';');
+            if (pos_delim != std::string::npos) {
                 pairs.emplace_back(
-                    line.substr(0, pos),
-                    line.substr(pos + 1)
+                    line.substr(0, pos_delim), // get chars before delimiter
+                    line.substr(pos_delim + 1) // get chars after delimiter
                 );
             }
             else {
@@ -95,7 +94,7 @@ std::vector<kvpair_t> fetch_data(std::string path)
 
 void measure_empty_store(kp_kv_local *local, benchmark_thread_args* args, std::vector<std::chrono::duration<double>>& latencies)
 {
-
+    // TODO how to determine key size and value size for empty store?
 }
 
 void measure_populated_store(kp_kv_local *local, benchmark_thread_args* thread_args, std::vector<std::chrono::duration<double>>& latencies)
@@ -146,6 +145,7 @@ void measure_populated_store(kp_kv_local *local, benchmark_thread_args* thread_a
             const char* key = _key.c_str();
             const char* val = _val.c_str();
             const std::size_t siz = _val.size();
+
             auto start = std::chrono::high_resolution_clock::now();
             rc = kp_local_put(local, key, val, siz);
             (void)rc;
@@ -159,10 +159,26 @@ void measure_populated_store(kp_kv_local *local, benchmark_thread_args* thread_a
         // TODO do I need this?
     }
     else if (opcode == "del") {
-        // TODO do I need this?
-        // // Delete a key
-        // char *key;
-        // rc = kp_local_delete_key(local, key);
+        int rc;
+        for (size_t i=0; i<num_repeats; ++i) {
+            const auto& [_key, _val] = pairs[dist(rng)];
+            (void)_val;
+            if (thread_args->pargs->verbose) {
+                std::cout << "put(\n";
+                std::cout << "\tkey = " << _key << '\n';
+                std::cout << "\tval = " << _val << '\n';
+                std::cout << ")\n";
+            }
+            const char* key = _key.c_str();
+
+            auto start = std::chrono::high_resolution_clock::now();
+            rc = kp_local_delete_key(local, key);
+            (void)rc;
+            auto end = std::chrono::high_resolution_clock::now();
+            latencies.emplace_back(end - start);
+
+            // TODO figure out when to commit {never, always, once, ...}
+        }
     }
 
     // // Starting a transaction
@@ -383,18 +399,32 @@ void usage()
     std::cout << "\nSYNOPSIS\n";
     std::cout << "\tbaseline opcode [options]\n";
     std::cout << "\nDESCRIPTION\n";
-    std::cout << "\tbaseline is used to determine the average latency of of single database\n";
-    std::cout << "\toperations. opcode denotes the operation to be measured and is a required\n";
-    std::cout << "\targument. options may be used to configure the measurement but are not required.\n";
+    std::cout << "\tThis program is used to determine the average latency of ";
+    std::cout << "individual database\n";
+    std::cout << "\toperations. The opcode denotes the operation to be ";
+    std::cout << "measured and is a required\n";
+    std::cout << "\targument. The measurement may be configured via several ";
+    std::cout << "options.\n";
+    std::cout << "\nOPCODES\n";
+    std::cout << "\tput\n";
+    std::cout << "\t\tUpdate.\n";
+    std::cout << "\tins\n";
+    std::cout << "\t\tInsertion (currently not supported).\n";
+    std::cout << "\tget\n";
+    std::cout << "\t\tRetrieval.\n";
+    std::cout << "\tdel\n";
+    std::cout << "\t\tDeletion.\n";
     std::cout << "\nOPTIONS\n";
     std::cout << "\t-p, --populate FILE\n";
     std::cout << "\t\tPopulates the database with data from the specified file.\n";
     std::cout << "\t-r, --repeats NUM\n";
-    std::cout << "\t\tSets the number of repetitions for the given operation.\n";
+    std::cout << "\t\tSets the number of repetitions for the given operation (default = 1000).\n";
     std::cout << "\t-u, --unit UNIT\n";
-    std::cout << "\t\tSets the time unit of used when printing results. Can be one of {s | ms | us | ns}.\n";
+    std::cout << "\t\tSets the time unit of used when printing results. Can be one of {s | ms | us | ns} (default = s).\n";
     std::cout << "\t-v, --verbose\n";
     std::cout << "\t\tEnables verbose mode. With this, all intermediate results will be shown.\n";
+    std::cout << "\t-h, --help\n";
+    std::cout << "\t\tShow this help text.\n";
 }
 
 void parse_args(int argc, char* argv[], program_args& pargs)
@@ -414,6 +444,7 @@ void parse_args(int argc, char* argv[], program_args& pargs)
         { "populate" , required_argument , NULL , 'p' },
         { "unit"     , required_argument , NULL , 'u' },
         { "verbose"  , no_argument       , NULL , 'v' },
+        { "help"     , no_argument       , NULL , 'h' },
         { NULL       , 0                 , NULL , 0 }
     };
 
@@ -434,6 +465,11 @@ void parse_args(int argc, char* argv[], program_args& pargs)
 
         case 'v':
             pargs.verbose = true;
+            break;
+
+        case 'h':
+            usage();
+            exit(0);
             break;
 
         // case 0:
