@@ -17,7 +17,7 @@ extern "C" {
 #include "kp_kv_master.h"   // master store
 #include "kp_macros.h"      // kp_die()
 #include "clibpm.h"         // PMSIZE, pmemalloc_init
-
+#include "kp_recovery.h"
 // void *pmemalloc_init(const char *path, size_t size);
 }
 
@@ -496,6 +496,12 @@ void print_args(program_args& pargs)
 
 int main(int argc, char* argv[])
 {
+#ifdef FLUSH_IT
+    std::cout << "flushing: enabled" << std::endl;
+#else
+    std::cout << "flushing: disabled" << std::endl;
+#endif
+
     if (argc < 2) {
         usage();
         exit(0);
