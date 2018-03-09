@@ -10,7 +10,7 @@
 
 #include <getopt.h> // getopt_long
 
-#define PERSISTENT_HEAP "/dev/shm/efile"
+#define PERSISTENT_HEAP "/dev/shm/nvdimm_echo"
 
 extern "C" {
 #include "kp_kv_local.h"    // local store

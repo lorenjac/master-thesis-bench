@@ -17,7 +17,7 @@
 
 namespace bench {
 
-const std::string STORE_FILE = "/tmp/nvm";
+const std::string STORE_FILE = "/dev/shm/nvdimm_midas";
 const size_t POOL_SIZE = 64ULL * 1024 * 1024;
 
 enum {
