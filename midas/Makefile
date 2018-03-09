@@ -20,9 +20,13 @@ BIN_DIR=bin
 
 # Targets
 
-all : baseline
+all : baseline scaling
 
 baseline :
+	$(CC) -c $(CFLAGS) $(INCLUDE) $(SRC_DIR)/$@.cpp -o $(BIN_DIR)/$@.o
+	$(CC) $(CFLAGS) $(BIN_DIR)/$@.o $(LDFLAGS) -o $(BIN_DIR)/$@
+
+scaling :
 	$(CC) -c $(CFLAGS) $(INCLUDE) $(SRC_DIR)/$@.cpp -o $(BIN_DIR)/$@.o
 	$(CC) $(CFLAGS) $(BIN_DIR)/$@.o $(LDFLAGS) -o $(BIN_DIR)/$@
 
