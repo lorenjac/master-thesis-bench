@@ -6,7 +6,7 @@ CFLAGS=-std=c++1z -Wall -O2
 # Inputs
 
 MIDAS_HOME=lib/midas
-INCLUDE=-I $(MIDAS_HOME)/include -I lib/libcuckoo -I lib/pmdk/src/include
+INCLUDE=-I $(MIDAS_HOME)/include -I lib/libcuckoo -I lib/pmdk/src/include -I include
 SRC_DIR=src
 
 LIB_DIR=-L $(MIDAS_HOME)/bin -Llib/pmdk/src/nondebug/
