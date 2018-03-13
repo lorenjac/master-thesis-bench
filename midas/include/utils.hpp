@@ -9,6 +9,7 @@
 #include <getopt.h> // getopt_long
 #include <unordered_map>
 #include <functional>
+#include <memory>
 
 namespace bench {
 
@@ -25,13 +26,18 @@ struct ProgramArgs {
     std::string unit = "s";
 };
 
+enum class OpCode { Get, Put, Ins, Del };
+
 struct TransactionProfile {
+    using Ptr = std::shared_ptr<TransactionProfile>;
+
     std::string name;
-    std::size_t prob;
-    std::size_t get_prob;
-    std::size_t put_prob;
-    std::size_t ins_prob;
-    std::size_t del_prob;
+    double prob;
+    // double get_prob;
+    // double put_prob;
+    // double ins_prob;
+    // double del_prob;
+    std::vector<std::pair<double, OpCode>> ops;
     std::size_t length_min;
     std::size_t length_max;
 };
@@ -43,27 +49,31 @@ struct TransactionProfile {
 //     std::vector<std::size_t, OpCode> ops;
 //     std::normal_distribution<> length_dist;
 // };
-// 
+//
 // TransactionProfile* select_profile(const ProfileVector& profiles, std::uniform_distribution<> uni_dist)
 // {
 //     // need rng engine here ...
 // }
 
-void load_profile(const std::string& path, TransactionProfile& prof)
+void load_profile(const std::string& path, TransactionProfile::Ptr prof)
 {
     std::ifstream ifs{path};
     if (!ifs.is_open())
         throw std::invalid_argument("error: could not open profile");
 
     std::unordered_map<std::string, std::function<void(const std::string&)>> handlers{
-        {"name", [&](const std::string& val){ prof.name = val; }},
-        {"prob", [&](const std::string& val){ prof.prob = std::stoll(val); }},
-        {"get_prob", [&](const std::string& val){ prof.get_prob = std::stoll(val); }},
-        {"put_prob", [&](const std::string& val){ prof.put_prob = std::stoll(val); }},
-        {"ins_prob", [&](const std::string& val){ prof.ins_prob = std::stoll(val); }},
-        {"del_prob", [&](const std::string& val){ prof.del_prob = std::stoll(val); }},
-        {"length_min", [&](const std::string& val){ prof.length_min = std::stoll(val); }},
-        {"length_max", [&](const std::string& val){ prof.length_max = std::stoll(val); }}
+        {"name", [&](const std::string& val){ prof->name = val; }},
+        {"prob", [&](const std::string& val){ prof->prob = std::stod(val); }},
+        {"get_prob", [&](const std::string& val){ prof->ops.emplace_back(std::stod(val), OpCode::Get); }},
+        {"put_prob", [&](const std::string& val){ prof->ops.emplace_back(std::stod(val), OpCode::Put); }},
+        {"ins_prob", [&](const std::string& val){ prof->ops.emplace_back(std::stod(val), OpCode::Ins); }},
+        {"del_prob", [&](const std::string& val){ prof->ops.emplace_back(std::stod(val), OpCode::Del); }},
+        // {"get_prob", [&](const std::string& val){ prof->get_prob = std::stod(val); }},
+        // {"put_prob", [&](const std::string& val){ prof->put_prob = std::stod(val); }},
+        // {"ins_prob", [&](const std::string& val){ prof->ins_prob = std::stod(val); }},
+        // {"del_prob", [&](const std::string& val){ prof->del_prob = std::stod(val); }},
+        {"length_min", [&](const std::string& val){ prof->length_min = std::stoll(val); }},
+        {"length_max", [&](const std::string& val){ prof->length_max = std::stoll(val); }}
     };
 
     std::string line;
@@ -86,14 +96,18 @@ void load_profile(const std::string& path, TransactionProfile& prof)
     }
 
     std::cout << "profile: " << path << std::endl;;
-    std::cout << "\tname: " << prof.name << std::endl;
-    std::cout << "\tprob: " << prof.prob << std::endl;
-    std::cout << "\tprob_get: " << prof.get_prob << std::endl;
-    std::cout << "\tprob_put: " << prof.put_prob << std::endl;
-    std::cout << "\tprob_ins: " << prof.ins_prob << std::endl;
-    std::cout << "\tprob_del: " << prof.del_prob << std::endl;
-    std::cout << "\tlength_min: " << prof.length_min << std::endl;
-    std::cout << "\tlength_max: " << prof.length_max << std::endl;
+    std::cout << "\tname: " << prof->name << std::endl;
+    std::cout << "\tprob: " << prof->prob << std::endl;
+    std::cout << "\tprob_get: " << prof->ops[0].first << std::endl;
+    std::cout << "\tprob_put: " << prof->ops[1].first << std::endl;
+    std::cout << "\tprob_ins: " << prof->ops[2].first << std::endl;
+    std::cout << "\tprob_del: " << prof->ops[3].first << std::endl;
+    // std::cout << "\tprob_get: " << prof->get_prob << std::endl;
+    // std::cout << "\tprob_put: " << prof->put_prob << std::endl;
+    // std::cout << "\tprob_ins: " << prof->ins_prob << std::endl;
+    // std::cout << "\tprob_del: " << prof->del_prob << std::endl;
+    std::cout << "\tlength_min: " << prof->length_min << std::endl;
+    std::cout << "\tlength_max: " << prof->length_max << std::endl;
 }
 
 std::vector<KVPair> fetch_data(const std::string& path)

@@ -25,48 +25,132 @@ struct BenchThreadArgs {
     cpu_set_t cpu_set;
     ProgramArgs* pargs;
     midas::Store* store;
-    std::vector<KVPair>* pairs;
-    std::vector<TransactionProfile>* tx_profiles;
+    std::vector<KVPair> pairs;
+    std::vector<TransactionProfile::Ptr> tx_profiles;
 };
 
 void* worker_routine(void* arg)
 {
     BenchThreadArgs* worker_args = (BenchThreadArgs *) arg;
-    ProgramArgs* pargs = worker_args->pargs;
+    ProgramArgs* prog_args = worker_args->pargs;
 
-    const auto& pairs = *worker_args->pairs;
-    const auto num_txs = pargs->num_txs;
-    const auto num_retries = pargs->num_retries;
-    const auto& tx_profiles = *worker_args->tx_profiles;
-    const auto tx_len_min = pargs->tx_len_min;
-    const auto tx_len_max = pargs->tx_len_max;
+    const auto store = worker_args->store;
+    const auto& pairs = worker_args->pairs;
+    const auto num_txs = prog_args->num_txs;
+    const auto num_retries_max = prog_args->num_retries;
+    const auto& tx_profiles = worker_args->tx_profiles;
+    const auto tx_len_min = prog_args->tx_len_min;
+    const auto tx_len_max = prog_args->tx_len_max;
 
     std::random_device dev;
     std::mt19937 rng(dev());
+    std::uniform_int_distribution<> prob_dist{1, 100}; // for selecting profiles, operations
+    std::uniform_int_distribution<> pair_dist{0,
+            static_cast<int>(pairs.size() - 1)}; // for selecting pairs
+    std::normal_distribution<> len_dist{static_cast<double>(tx_len_min),
+            static_cast<double>(tx_len_max)}; // for selecting #ops in a transaction
+
+    int rand;
+    OpCode opcode;
+    TransactionProfile::Ptr prof;
+    std::string result;
+    std::size_t num_failures = 0;
+    std::size_t num_rw_conflicts = 0;
+    std::size_t num_ww_conflicts = 0;
 
     for (std::size_t i=0; i<num_txs; ++i) {
-        // select random tx profile (using custom distribution in profiles)
+        // select random tx profile (using probabilities from profiles)
+        rand = prob_dist(rng);
+        for (auto const& p : tx_profiles) {
+            if (rand <= p->prob) {
+                prof = p;
+                break;
+            }
+            rand -= p->prob;
+        }
+
         // select random tx length (using normal distribution based on profile)
+        auto tx_length = std::round(len_dist(rng));
+
         // begin transaction
+        auto tx = store->begin();
+
         // loop for $tx_length steps
+        for (std::size_t step=0; step<tx_length; ++step) {
             // select random operation (using custom distribution in profile)
+            rand = prob_dist(rng);
+            for (auto const& [prob, op] : prof->ops) {
+                if (rand <= prob) {
+                    opcode = op;
+                    break;
+                }
+                rand -= prob;
+            }
+
             // select random pair (using uniform distribution)
-        // loop $num_retries times if tx fails to commit
-            // commit transaction
+            const auto& [key, val] = pairs[pair_dist(rng)];
+
+            // perform operation
+            switch (opcode) {
+            case OpCode::Get:
+                store->read(tx, key, result);
+                break;
+
+            case OpCode::Put:
+                store->write(tx, key, val);
+                break;
+
+            case OpCode::Ins:
+                store->write(tx, key, val);
+                break;
+
+            case OpCode::Del:
+                store->drop(tx, key);
+                break;
+
+            default:
+                throw std::runtime_error("error: unexpected operation type");
+            }
+        }
+
+        // commit transaction; increase error counters if necessary
+        const auto status = store->commit(tx);
+        if (status != midas::Store::OK) {
+            ++num_failures;
+            if (status == midas::Store::WW_CONFLICT)
+                ++num_ww_conflicts;
+            else if (status == midas::Store::RW_CONFLICT)
+                ++num_rw_conflicts;
+
+            // TODO make sure this tx is retried (do we need that?)
+        }
     }
     return nullptr;
 }
 
 int run(ProgramArgs* pargs)
 {
-    std::vector<KVPair> pairs;
-    if (!pargs->data_path.empty())
-        pairs = fetch_data(pargs->data_path);
+    BenchThreadArgs thread_args;
+    thread_args.pargs = pargs;
 
-    std::vector<TransactionProfile> profiles;
-    for (const auto& fpath : pargs->tx_profile_paths) {
-        load_profile(fpath, profiles.emplace_back());
+    if (!pargs->data_path.empty()) {
+        thread_args.pairs = fetch_data(pargs->data_path);
     }
+
+    for (const auto& fpath : pargs->tx_profile_paths) {
+        auto prof = std::make_shared<TransactionProfile>();
+        load_profile(fpath, prof);
+        thread_args.tx_profiles.push_back(prof);
+    }
+    std::sort(thread_args.tx_profiles.begin(), thread_args.tx_profiles.end(),
+            [](auto a, auto b){ return a->prob <= b->prob; });
+
+    // std::cout << "profiles:\n";
+    // for (auto p : thread_args.tx_profiles) {
+    //     std::cout << "prob: " << p->prob << std::endl;
+    // }
+
+    // return 0;
 
     std::cout << "initializing store..." << std::endl;
     midas::pop_type pop;
@@ -75,16 +159,17 @@ int run(ProgramArgs* pargs)
         return 0;
     }
     midas::Store store{pop};
-    
+    thread_args.store = &store;
+
     // ########################################################################
     // Populate store
     // ########################################################################
 
     std::cout << "populating..." << std::endl;
 
-    if (pairs.size()) {
+    if (thread_args.pairs.size()) {
         auto tx = store.begin();
-        for (auto [key, value] : pairs) {
+        for (auto [key, value] : thread_args.pairs) {
             store.write(tx, key, value);
         }
         store.commit(tx);
@@ -97,11 +182,6 @@ int run(ProgramArgs* pargs)
     pthread_attr_t attr;
     pthread_t thread;
     void *ret_thread;
-    BenchThreadArgs thread_args;
-
-    thread_args.pargs = pargs;
-    thread_args.store = &store;
-    thread_args.pairs = &pairs;
 
     /* Setup CPU for everybody: don't spawn yet */
     cpu = CPU_OFFSET + (i % NUM_CPUS);
@@ -157,7 +237,7 @@ int main(int argc, char* argv[])
     ProgramArgs pargs;
     parse_args(argc, argv, pargs);
     print_args(pargs);
-    //run(&pargs);
+    run(&pargs);
 
     return 0;
 }
