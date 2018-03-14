@@ -37,26 +37,44 @@ void* worker_routine(void* arg)
     const auto store = worker_args->store;
     const auto& pairs = worker_args->pairs;
     const auto num_txs = prog_args->num_txs;
-    const auto num_retries_max = prog_args->num_retries;
+    // const auto num_retries_max = prog_args->num_retries;
     const auto& tx_profiles = worker_args->tx_profiles;
     const auto tx_len_min = prog_args->tx_len_min;
     const auto tx_len_max = prog_args->tx_len_max;
+    const auto time_unit = prog_args->unit;
 
+    // Pseudo-random number generator
     std::random_device dev;
     std::mt19937 rng(dev());
-    std::uniform_int_distribution<> prob_dist{1, 100}; // for selecting profiles, operations
-    std::uniform_int_distribution<> pair_dist{0,
-            static_cast<int>(pairs.size() - 1)}; // for selecting pairs
-    std::normal_distribution<> len_dist{static_cast<double>(tx_len_min),
-            static_cast<double>(tx_len_max)}; // for selecting #ops in a transaction
 
-    int rand;
-    OpCode opcode;
+    // Distribution for selecting profiles, operations
+    std::uniform_int_distribution<> prob_dist{1, 100};
+
+    // Distribution for selecting pairs
+    std::uniform_int_distribution<> pair_dist{0, static_cast<int>(pairs.size() - 1)};
+
+    // Distribution for selecting #ops in a transaction
+    double tx_len_mean = (tx_len_max - tx_len_min) / 2.0;
+    std::normal_distribution<> len_dist{
+            tx_len_mean,
+            std::sqrt(tx_len_mean - tx_len_min)};
+
+    // Runtime variables
+    int rand = 0;
+    OpCode opcode = OpCode::Get;
     TransactionProfile::Ptr prof;
     std::string result;
+
+    // Counters
     std::size_t num_failures = 0;
     std::size_t num_rw_conflicts = 0;
     std::size_t num_ww_conflicts = 0;
+
+    // ########################################################################
+    // ## START ###############################################################
+    // ########################################################################
+
+    const auto time_start = std::chrono::high_resolution_clock::now();
 
     for (std::size_t i=0; i<num_txs; ++i) {
         // select random tx profile (using probabilities from profiles)
@@ -69,8 +87,12 @@ void* worker_routine(void* arg)
             rand -= p->prob;
         }
 
+        std::cout << "selected profile: " << prof->name << std::endl;
+
         // select random tx length (using normal distribution based on profile)
         auto tx_length = std::round(len_dist(rng));
+
+        std::cout << "selected tx length: " << tx_length << std::endl;
 
         // begin transaction
         auto tx = store->begin();
@@ -87,8 +109,12 @@ void* worker_routine(void* arg)
                 rand -= prob;
             }
 
+            std::cout << "selected operation: " << opcode << std::endl;
+
             // select random pair (using uniform distribution)
             const auto& [key, val] = pairs[pair_dist(rng)];
+
+            std::cout << "selected pair: [" << key << ", " << val << "]" << std::endl;
 
             // perform operation
             switch (opcode) {
@@ -125,6 +151,18 @@ void* worker_routine(void* arg)
             // TODO make sure this tx is retried (do we need that?)
         }
     }
+
+    const auto time_end = std::chrono::high_resolution_clock::now();
+
+    // ########################################################################
+    // ## END #################################################################
+    // ########################################################################
+
+    std::cout << "time elapsed = " << convert_duration(time_end - time_start, time_unit) << time_unit << std::endl;
+    std::cout << "#failures = " << num_failures << std::endl;
+    std::cout << "#w/w conflicts = " << num_ww_conflicts << std::endl;
+    std::cout << "#r/w conflicts = " << num_rw_conflicts << std::endl;
+
     return nullptr;
 }
 
@@ -144,13 +182,6 @@ int run(ProgramArgs* pargs)
     }
     std::sort(thread_args.tx_profiles.begin(), thread_args.tx_profiles.end(),
             [](auto a, auto b){ return a->prob <= b->prob; });
-
-    // std::cout << "profiles:\n";
-    // for (auto p : thread_args.tx_profiles) {
-    //     std::cout << "prob: " << p->prob << std::endl;
-    // }
-
-    // return 0;
 
     std::cout << "initializing store..." << std::endl;
     midas::pop_type pop;
@@ -236,8 +267,12 @@ int main(int argc, char* argv[])
 
     ProgramArgs pargs;
     parse_args(argc, argv, pargs);
-    print_args(pargs);
-    run(&pargs);
-
+    if (validate_args(pargs)) {
+        print_args(pargs);
+        run(&pargs);
+    }
+    else {
+        usage();
+    }
     return 0;
 }

@@ -17,46 +17,55 @@ using KVPair = std::pair<std::string, std::string>;
 
 struct ProgramArgs {
     std::string data_path;
-    std::size_t num_threads;
-    std::size_t num_txs;
-    std::size_t num_retries;
+    std::size_t num_threads = 1;
+    std::size_t num_txs = 1;
+    std::size_t num_retries = 0;
     std::vector<std::string> tx_profile_paths;
-    std::size_t tx_len_min;
-    std::size_t tx_len_max;
+    std::size_t tx_len_min = 2;
+    std::size_t tx_len_max = 256;
     std::string unit = "s";
 };
 
 enum class OpCode { Get, Put, Ins, Del };
+std::ostream& operator<<(std::ostream& os, OpCode op)
+{
+    switch (op) {
+    case OpCode::Get:
+        os << "Get";
+        break;
+
+    case OpCode::Put:
+        os << "Put";
+        break;
+
+    case OpCode::Ins:
+        os << "Ins";
+        break;
+
+    case OpCode::Del:
+        os << "Del";
+        break;
+
+    default:
+        throw std::runtime_error("error: unexpected op code");
+    }
+    return os;
+}
 
 struct TransactionProfile {
     using Ptr = std::shared_ptr<TransactionProfile>;
 
     std::string name;
     double prob;
-    // double get_prob;
-    // double put_prob;
-    // double ins_prob;
-    // double del_prob;
     std::vector<std::pair<double, OpCode>> ops;
     std::size_t length_min;
     std::size_t length_max;
 };
 
-// using ProfileVector = std::vector<std::pair<std::size_t, TransactionProfile*>> profiles;
-// enum OpCode { GET, PUT, INS, DEL };
-// struct TransactionProfile {
-//     std::string name;
-//     std::vector<std::size_t, OpCode> ops;
-//     std::normal_distribution<> length_dist;
-// };
-//
-// TransactionProfile* select_profile(const ProfileVector& profiles, std::uniform_distribution<> uni_dist)
-// {
-//     // need rng engine here ...
-// }
-
 void load_profile(const std::string& path, TransactionProfile::Ptr prof)
 {
+    std::cout << "loading transaction profile from file " << path << "...\n";
+
     std::ifstream ifs{path};
     if (!ifs.is_open())
         throw std::invalid_argument("error: could not open profile");
@@ -68,10 +77,6 @@ void load_profile(const std::string& path, TransactionProfile::Ptr prof)
         {"put_prob", [&](const std::string& val){ prof->ops.emplace_back(std::stod(val), OpCode::Put); }},
         {"ins_prob", [&](const std::string& val){ prof->ops.emplace_back(std::stod(val), OpCode::Ins); }},
         {"del_prob", [&](const std::string& val){ prof->ops.emplace_back(std::stod(val), OpCode::Del); }},
-        // {"get_prob", [&](const std::string& val){ prof->get_prob = std::stod(val); }},
-        // {"put_prob", [&](const std::string& val){ prof->put_prob = std::stod(val); }},
-        // {"ins_prob", [&](const std::string& val){ prof->ins_prob = std::stod(val); }},
-        // {"del_prob", [&](const std::string& val){ prof->del_prob = std::stod(val); }},
         {"length_min", [&](const std::string& val){ prof->length_min = std::stoll(val); }},
         {"length_max", [&](const std::string& val){ prof->length_max = std::stoll(val); }}
     };
@@ -95,23 +100,21 @@ void load_profile(const std::string& path, TransactionProfile::Ptr prof)
         }
     }
 
-    std::cout << "profile: " << path << std::endl;;
-    std::cout << "\tname: " << prof->name << std::endl;
-    std::cout << "\tprob: " << prof->prob << std::endl;
-    std::cout << "\tprob_get: " << prof->ops[0].first << std::endl;
-    std::cout << "\tprob_put: " << prof->ops[1].first << std::endl;
-    std::cout << "\tprob_ins: " << prof->ops[2].first << std::endl;
-    std::cout << "\tprob_del: " << prof->ops[3].first << std::endl;
-    // std::cout << "\tprob_get: " << prof->get_prob << std::endl;
-    // std::cout << "\tprob_put: " << prof->put_prob << std::endl;
-    // std::cout << "\tprob_ins: " << prof->ins_prob << std::endl;
-    // std::cout << "\tprob_del: " << prof->del_prob << std::endl;
-    std::cout << "\tlength_min: " << prof->length_min << std::endl;
-    std::cout << "\tlength_max: " << prof->length_max << std::endl;
+    std::cout << "profile: " << path << std::endl;
+    std::cout << "  * name: " << prof->name << std::endl;
+    std::cout << "  * prob: " << prof->prob << std::endl;
+    std::cout << "  * prob_get: " << prof->ops[0].first << std::endl;
+    std::cout << "  * prob_put: " << prof->ops[1].first << std::endl;
+    std::cout << "  * prob_ins: " << prof->ops[2].first << std::endl;
+    std::cout << "  * prob_del: " << prof->ops[3].first << std::endl;
+    std::cout << "  * length_min: " << prof->length_min << std::endl;
+    std::cout << "  * length_max: " << prof->length_max << std::endl;
 }
 
 std::vector<KVPair> fetch_data(const std::string& path)
 {
+    std::cout << "loading sample data from file " << path << "...\n";
+
     std::ifstream ifs{path};
     if (!ifs.is_open())
         return {};
@@ -151,15 +154,40 @@ double convert_duration(std::chrono::duration<double> dur, const std::string& un
 
 void usage()
 {
+    ProgramArgs pargs;
     std::cout << "NAME\n";
     std::cout << "\tscaling - determine transaction throughput\n";
     std::cout << "\nSYNOPSIS\n";
     std::cout << "\tscaling options\n";
     std::cout << "\nDESCRIPTION\n";
     std::cout << "\nOPTIONS\n";
-    std::cout << "\t-u, --unit UNIT\n";
-    std::cout << "\t\tSets the time unit of used when printing results. Can be one of {s | ms | us | ns} (default = s).\n";
-    std::cout << "\t-h, --help\n";
+    std::cout << "\t-d, --data FILE\n";
+    std::cout << "\t\tPath to a file containing sample data pairs in CSV format. This parameter is required.\n";
+    std::cout << "\n\t-p, --tx-profile FILE\n";
+    std::cout << "\t\tPath to a file containing a transaction profile.\n";
+    std::cout << "\t\tTransaction profiles control the kind of transactions that can be spawned.\n";
+    std::cout << "\t\tThis parameter is required. Use -p again to provide more than one profile.\n";
+    std::cout << "\t\tA profile has the format PARAMETER=VALUE for every line, order is arbitrary.\n";
+    std::cout << "\t\tThe parameters are as follows:\n";
+    std::cout << "\t\t  * name - name of the profile (string)\n";
+    std::cout << "\t\t  * prob - probability of this transaction profile to be chosen (float)\n";
+    std::cout << "\t\t  * get_prob - probability of a get operation (float)\n";
+    std::cout << "\t\t  * put_prob - probability of a put operation (float)\n";
+    std::cout << "\t\t  * ins_prob - probability of a ins operation (float)\n";
+    std::cout << "\t\t  * del_prob - probability of a del operation (float)\n";
+    std::cout << "\n\t-t, --num-threads INT\n";
+    std::cout << "\t\tThe number of worker threads to spawn. (default = " << pargs.num_threads << ")\n";
+    std::cout << "\n\t-n, --num-txs INT\n";
+    std::cout << "\t\tThe number of transactions each thread has to perform. (default = " << pargs.num_txs << ")\n";
+    std::cout << "\n\t-i, --tx-length-min INT\n";
+    std::cout << "\t\tThe minimum number of operations enclosed in a transaction. (default = " << pargs.tx_len_min << ")\n";
+    std::cout << "\n\t-a, --tx-length-max INT\n";
+    std::cout << "\t\tThe maximum number of operations enclosed in a transaction. (default = " << pargs.tx_len_max << ")\n";
+    std::cout << "\n\t-r, --num-retries INT\n";
+    std::cout << "\t\tThe number of times a transaction is restarted if it fails to commit. (default = " << pargs.num_retries << ")\n";
+    std::cout << "\n\t-u, --unit UNIT\n";
+    std::cout << "\t\tSets the time unit of used when printing results. Can be one of {s | ms | us | ns} (default = " << pargs.unit << ")\n";
+    std::cout << "\n\t-h, --help\n";
     std::cout << "\t\tShow this help text.\n";
 }
 
@@ -170,8 +198,6 @@ void parse_args(int argc, char* argv[], ProgramArgs& args)
         { "num-threads"   , required_argument , NULL , 't' },
         { "num-txs"       , required_argument , NULL , 'n' },
         { "num-retries"   , required_argument , NULL , 'r' },
-//        { "mixed-profile" , required_argument , NULL , 'm' },
-//        { "ronly-profile" , required_argument , NULL , 'o' },
         { "tx-profile"    , required_argument , NULL , 'p' },
         { "tx-length-min" , required_argument , NULL , 'i' },
         { "tx-length-max" , required_argument , NULL , 'a' },
@@ -199,12 +225,6 @@ void parse_args(int argc, char* argv[], ProgramArgs& args)
         case 'r': // number of times a transaction can be retried upon failure
             args.num_retries = std::stoll(optarg);
             break;
-
-        // case 'm': // path to profile for mixed transactions
-        //     break;
-
-        // case 'o': // path to profile for read-only transactions
-        //     break;
 
         case 'p': // add path to transaction profile
             args.tx_profile_paths.emplace_back(optarg);
@@ -236,6 +256,19 @@ void parse_args(int argc, char* argv[], ProgramArgs& args)
     argv += optind;
 }
 
+bool validate_args(ProgramArgs& args)
+{
+    if (args.data_path.empty()) {
+        std::cout << "error: no sample data provided (see option -d)\n";
+        return false;
+    }
+    else if (args.tx_profile_paths.empty()) {
+        std::cout << "error: no transaction profiles provided (see option -p)\n";
+        return false;
+    }
+    return true;
+}
+
 void print_args(ProgramArgs& args)
 {
     std::cout << "data_path: " << args.data_path << std::endl;
@@ -244,7 +277,7 @@ void print_args(ProgramArgs& args)
     std::cout << "num_retries: " << args.num_retries << std::endl;
     std::cout << "profile_paths: " << std::endl;
     for (const auto& p : args.tx_profile_paths)
-        std::cout << "\t" << p << std::endl;
+        std::cout << "  * " << p << std::endl;
     std::cout << "tx_len_min: " << args.tx_len_min << std::endl;
     std::cout << "tx_len_max: " << args.tx_len_max << std::endl;
     std::cout << "unit: " << args.unit << std::endl;
