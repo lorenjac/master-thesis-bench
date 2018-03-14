@@ -212,7 +212,7 @@ int run(ProgramArgs* pargs)
     int cpu;
     pthread_attr_t attr;
     pthread_t thread;
-    void *ret_thread;
+    // void *ret_thread;
 
     /* Setup CPU for everybody: don't spawn yet */
     cpu = CPU_OFFSET + (i % NUM_CPUS);
@@ -237,14 +237,18 @@ int run(ProgramArgs* pargs)
         std::printf("pthread_create() returned error=%d\n", rc);
 
     /* Get that worker back and cleanup! */
-    rc = pthread_join(thread, &ret_thread);
+    rc = pthread_join(thread, nullptr);
     if(rc != 0)
         std::printf("pthread_join() returned error=%d\n", rc);
 
-    if(ret_thread) {
-        free(ret_thread);
-        ret_thread = NULL;
-    }
+    // rc = pthread_join(thread, &ret_thread);
+    // if(rc != 0)
+    //     std::printf("pthread_join() returned error=%d\n", rc);
+
+    // if(ret_thread) {
+    //     free(ret_thread);
+    //     ret_thread = NULL;
+    // }
 
     rc = pthread_attr_destroy(&attr);
     if(rc != 0)
