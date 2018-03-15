@@ -266,6 +266,26 @@ bool validate_args(ProgramArgs& args)
         std::cout << "error: no transaction profiles provided (see option -p)\n";
         return false;
     }
+    else if (args.num_threads < 1) {
+        std::cout << "error: spawning less than 1 threads is not allowed (see option -t)\n";
+        return false;
+    }
+    else if (args.num_txs < 1) {
+        std::cout << "error: spwaning less than 1 transaction is not allowed (see option -n)\n";
+        return false;
+    }
+    else if (args.tx_len_min < 1) {
+        std::cout << "error: a transaction must perform at least one operation (see option -i)\n";
+        return false;
+    }
+    else if (args.tx_len_max < 1) {
+        std::cout << "error: a transaction must perform at least one operation (see option -a)\n";
+        return false;
+    }
+    else if (args.unit != "s" && args.unit != "ms" && args.unit != "us" && args.unit != "ns") {
+        std::cout << "error: invalid time unit (see option -u)\n";
+        return false;
+    }
     return true;
 }
 

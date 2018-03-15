@@ -18,15 +18,27 @@ const size_t POOL_SIZE = 64ULL * 1024 * 1024;
 
 enum {
     NUM_CPUS = 2,
-    CPU_OFFSET = 0
+    CPU_OFFSET = 0,
+    MAX_THREADS = 256
+};
+
+struct BenchThreadResult {
+    std::size_t num_failures = 0;
+    std::size_t num_rw_conflicts = 0;
+    std::size_t num_ww_conflicts = 0;
+    std::size_t num_key_misses = 0;
+    std::size_t num_invalid_txs = 0;
+    std::chrono::high_resolution_clock::time_point start;
+    std::chrono::high_resolution_clock::time_point end;
 };
 
 struct BenchThreadArgs {
     cpu_set_t cpu_set;
     ProgramArgs* pargs;
     midas::Store* store;
-    std::vector<KVPair> pairs;
-    std::vector<TransactionProfile::Ptr> tx_profiles;
+    std::vector<KVPair>* pairs;
+    std::vector<TransactionProfile::Ptr>* tx_profiles;
+    BenchThreadResult result;
 };
 
 void* worker_routine(void* arg)
@@ -35,10 +47,10 @@ void* worker_routine(void* arg)
     ProgramArgs* prog_args = worker_args->pargs;
 
     const auto store = worker_args->store;
-    const auto& pairs = worker_args->pairs;
+    const auto pairs = worker_args->pairs;
     const auto num_txs = prog_args->num_txs;
     // const auto num_retries_max = prog_args->num_retries;
-    const auto& tx_profiles = worker_args->tx_profiles;
+    const auto tx_profiles = worker_args->tx_profiles;
     const auto tx_len_min = prog_args->tx_len_min;
     const auto tx_len_max = prog_args->tx_len_max;
     const auto time_unit = prog_args->unit;
@@ -51,7 +63,7 @@ void* worker_routine(void* arg)
     std::uniform_int_distribution<> prob_dist{1, 100};
 
     // Distribution for selecting pairs
-    std::uniform_int_distribution<> pair_dist{0, static_cast<int>(pairs.size() - 1)};
+    std::uniform_int_distribution<> pair_dist{0, static_cast<int>(pairs->size() - 1)};
 
     // Distribution for selecting #ops in a transaction
     double tx_len_mean = (tx_len_max - tx_len_min) / 2.0;
@@ -69,6 +81,8 @@ void* worker_routine(void* arg)
     std::size_t num_failures = 0;
     std::size_t num_rw_conflicts = 0;
     std::size_t num_ww_conflicts = 0;
+    std::size_t num_key_misses = 0;
+    std::size_t num_invalid_txs = 0;
 
     // ########################################################################
     // ## START ###############################################################
@@ -79,7 +93,7 @@ void* worker_routine(void* arg)
     for (std::size_t i=0; i<num_txs; ++i) {
         // select random tx profile (using probabilities from profiles)
         rand = prob_dist(rng);
-        for (auto const& p : tx_profiles) {
+        for (auto const& p : *tx_profiles) {
             if (rand <= p->prob) {
                 prof = p;
                 break;
@@ -112,7 +126,7 @@ void* worker_routine(void* arg)
             std::cout << "selected operation: " << opcode << std::endl;
 
             // select random pair (using uniform distribution)
-            const auto& [key, val] = pairs[pair_dist(rng)];
+            const auto& [key, val] = (*pairs)[pair_dist(rng)];
 
             std::cout << "selected pair: [" << key << ", " << val << "]" << std::endl;
 
@@ -147,6 +161,10 @@ void* worker_routine(void* arg)
                 ++num_ww_conflicts;
             else if (status == midas::Store::RW_CONFLICT)
                 ++num_rw_conflicts;
+            else if (status == midas::Store::VALUE_NOT_FOUND)
+                ++num_key_misses;
+            else if (status == midas::Store::INVALID_TX)
+                ++num_invalid_txs;
 
             // TODO make sure this tx is retried (do we need that?)
         }
@@ -158,39 +176,46 @@ void* worker_routine(void* arg)
     // ## END #################################################################
     // ########################################################################
 
-    std::cout << "time elapsed = " << convert_duration(time_end - time_start, time_unit) << time_unit << std::endl;
-    std::cout << "#failures = " << num_failures << std::endl;
-    std::cout << "#w/w conflicts = " << num_ww_conflicts << std::endl;
-    std::cout << "#r/w conflicts = " << num_rw_conflicts << std::endl;
+    // std::cout << "time elapsed = " << convert_duration(time_end - time_start, time_unit) << time_unit << std::endl;
+    // std::cout << "#failures = " << num_failures << std::endl;
+    // std::cout << "#misses = " << num_misses << std::endl;
+    // std::cout << "#w/w conflicts = " << num_ww_conflicts << std::endl;
+    // std::cout << "#r/w conflicts = " << num_rw_conflicts << std::endl;
+
+    worker_args->result.num_failures = num_failures;
+    worker_args->result.num_rw_conflicts = num_rw_conflicts;
+    worker_args->result.num_ww_conflicts = num_ww_conflicts;
+    worker_args->result.num_key_misses = num_key_misses;
+    worker_args->result.num_invalid_txs = num_invalid_txs;
+    worker_args->result.start = time_start;
+    worker_args->result.end = time_end;
 
     return nullptr;
 }
 
 int run(ProgramArgs* pargs)
 {
-    BenchThreadArgs thread_args;
-    thread_args.pargs = pargs;
+    // load sample data
+    auto pairs = fetch_data(pargs->data_path);
 
-    if (!pargs->data_path.empty()) {
-        thread_args.pairs = fetch_data(pargs->data_path);
-    }
-
+    // load profiles
+    std::vector<TransactionProfile::Ptr> profiles;
     for (const auto& fpath : pargs->tx_profile_paths) {
         auto prof = std::make_shared<TransactionProfile>();
         load_profile(fpath, prof);
-        thread_args.tx_profiles.push_back(prof);
+        profiles.push_back(prof);
     }
-    std::sort(thread_args.tx_profiles.begin(), thread_args.tx_profiles.end(),
+    std::sort(profiles.begin(), profiles.end(),
             [](auto a, auto b){ return a->prob <= b->prob; });
 
     std::cout << "initializing store..." << std::endl;
+
     midas::pop_type pop;
     if (!midas::init(pop, STORE_FILE, POOL_SIZE)) {
         std::cout << "error: could not open file <" << STORE_FILE << ">!\n";
-        return 0;
+        return 1;
     }
     midas::Store store{pop};
-    thread_args.store = &store;
 
     // ########################################################################
     // Populate store
@@ -198,57 +223,101 @@ int run(ProgramArgs* pargs)
 
     std::cout << "populating..." << std::endl;
 
-    if (thread_args.pairs.size()) {
+    if (pairs.size()) {
         auto tx = store.begin();
-        for (auto [key, value] : thread_args.pairs) {
+        for (auto [key, value] : pairs) {
             store.write(tx, key, value);
         }
         store.commit(tx);
     }
 
-    // pthread_spin_init(&tot_epoch_lock, PTHREAD_PROCESS_SHARED);
+    // ########################################################################
+    // Run benchmark
+    // ########################################################################
 
-    int rc, i = 0;
+    int rc;
     int cpu;
     pthread_attr_t attr;
-    pthread_t thread;
-    // void *ret_thread;
+    pthread_t threads[MAX_THREADS];
+    BenchThreadArgs thread_args[MAX_THREADS];
 
-    /* Setup CPU for everybody: don't spawn yet */
-    cpu = CPU_OFFSET + (i % NUM_CPUS);
-    CPU_ZERO(&(thread_args.cpu_set));
-    CPU_SET(cpu, &(thread_args.cpu_set));
+    for (std::size_t i = 0; i < pargs->num_threads; i++) {
+        thread_args[i].pargs = pargs;
+        thread_args[i].store = &store;
+        thread_args[i].pairs = &pairs;
+        thread_args[i].tx_profiles = &profiles;
 
-    /* Create Attributes */
-    rc = pthread_attr_init(&attr);
-    if(rc != 0)
-        std::printf("pthread_attr_init() returned error=%d\n", rc);
+        /* Create Attributes */
+        rc = pthread_attr_init(&attr);
+        if(rc != 0)
+            std::printf("pthread_attr_init() returned error=%d\n", rc);
 
-    /* Set affinity */
-    rc = pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &(thread_args.cpu_set));
-    if(rc != 0)
-        std::printf("pthread_attr_setaffinity_np() returned error=%d\n", rc);
+        /* Setup CPU for everybody: don't spawn yet */
+        cpu = CPU_OFFSET + (i % NUM_CPUS);
+        CPU_ZERO(&(thread_args[i].cpu_set));
+        CPU_SET(cpu, &(thread_args[i].cpu_set));
 
-    std::cout << "launching worker..." << std::endl;
+        /* Set affinity */
+        rc = pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &(thread_args[i].cpu_set));
+        if(rc != 0)
+            std::printf("pthread_attr_setaffinity_np() returned error=%d\n", rc);
 
-    /* Start thread */
-    rc = pthread_create(&thread, &attr, &worker_routine, (void *)(&thread_args));
-    if(rc != 0)
-        std::printf("pthread_create() returned error=%d\n", rc);
+        std::cout << "launching worker..." << std::endl;
 
-    /* Get that worker back and cleanup! */
-    rc = pthread_join(thread, nullptr);
-    if(rc != 0)
-        std::printf("pthread_join() returned error=%d\n", rc);
+        /* Start thread */
+        rc = pthread_create(&threads[i], &attr, &worker_routine, (void *)(&thread_args[i]));
+        if(rc != 0)
+            std::printf("pthread_create() returned error=%d\n", rc);
+    }
 
-    // rc = pthread_join(thread, &ret_thread);
-    // if(rc != 0)
-    //     std::printf("pthread_join() returned error=%d\n", rc);
+    // ########################################################################
+    // Barrier
+    // ########################################################################
 
-    // if(ret_thread) {
-    //     free(ret_thread);
-    //     ret_thread = NULL;
-    // }
+    /* Wait for all workers to complete! */
+    for (std::size_t i = 0; i < pargs->num_threads; ++i) {
+        rc = pthread_join(threads[i], nullptr);
+        if(rc != 0)
+            std::printf("pthread_join() returned error=%d\n", rc);
+    }
+
+    std::size_t num_failures = 0;
+    std::size_t num_rw_conflicts = 0;
+    std::size_t num_ww_conflicts = 0;
+    std::size_t num_key_misses = 0;
+    std::size_t num_invalid_txs = 0;
+    std::chrono::high_resolution_clock::time_point glob_start;
+    std::chrono::high_resolution_clock::time_point glob_end;
+    for (std::size_t i=0; i<pargs->num_threads; ++i) {
+        if (i == 0) {
+            glob_start = thread_args[i].result.start;
+            glob_end = thread_args[i].result.end;
+        }
+        else {
+            if (thread_args[i].result.start < glob_start)
+                glob_start = thread_args[i].result.start;
+            if (thread_args[i].result.end > glob_end)
+                glob_end = thread_args[i].result.end;
+        }
+        num_failures += thread_args[i].result.num_failures;
+        num_rw_conflicts += thread_args[i].result.num_rw_conflicts;
+        num_ww_conflicts += thread_args[i].result.num_ww_conflicts;
+        num_key_misses += thread_args[i].result.num_key_misses;
+        num_invalid_txs += thread_args[i].result.num_invalid_txs;
+    }
+
+    const auto time_unit = pargs->unit;
+    std::cout << "total time = " << convert_duration(glob_end - glob_start, time_unit) << time_unit << std::endl;
+    std::cout << "total #failures = " << num_failures << std::endl;
+    std::cout << "total #misses = " << num_key_misses << std::endl;
+    std::cout << "total #invalid txs = " << num_invalid_txs << std::endl;
+    std::cout << "total #w/w conflicts = " << num_ww_conflicts << std::endl;
+    std::cout << "total #r/w conflicts = " << num_rw_conflicts << std::endl;
+
+
+    // ########################################################################
+    // Cleanup
+    // ########################################################################
 
     rc = pthread_attr_destroy(&attr);
     if(rc != 0)
