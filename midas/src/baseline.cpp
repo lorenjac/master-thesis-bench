@@ -179,29 +179,33 @@ void evaluate(BenchThreadArgs* thread_args, const std::vector<std::chrono::durat
             std::cout << std::setw(index_width) << std::setfill('0') << i;
             std::cout << ": " << convert_duration(latencies[i], unit) << unit << std::endl;
         }
+        std::cout << "--------------------------------------------------\n";
     }
-
-    std::cout << "--------------------------------------------------\n";
 
     auto min = std::min_element(std::begin(latencies), std::end(latencies));
     auto max = std::max_element(std::begin(latencies), std::end(latencies));
-    std::cout << "min: " << convert_duration(*min, unit) << unit << std::endl;
-    std::cout << "max: " << convert_duration(*max, unit) << unit << std::endl;
+    std::cout << "min;" << convert_duration(*min, unit) << std::endl;
+    // std::cout << "min;" << convert_duration(*min, unit) << unit << std::endl;
+    std::cout << "max;" << convert_duration(*max, unit) << std::endl;
+    // std::cout << "max;" << convert_duration(*max, unit) << unit << std::endl;
 
     auto size = latencies.size();
     if (size % 2) {
-        std::cout << "med: " << convert_duration(latencies[size / 2], unit) << unit << std::endl;
+        std::cout << "med;" << convert_duration(latencies[size / 2], unit) << std::endl;
+        // std::cout << "med;" << convert_duration(latencies[size / 2], unit) << unit << std::endl;
     }
     else {
         auto lower = latencies[size / 2 - 1];
         auto upper = latencies[size / 2];
-        std::cout << "med: " << convert_duration((lower + upper) / 2, unit) << unit << std::endl;
+        std::cout << "med;" << convert_duration((lower + upper) / 2, unit) << std::endl;
+        // std::cout << "med;" << convert_duration((lower + upper) / 2, unit) << unit << std::endl;
     }
 
     std::chrono::duration<double> sum;
     for (const auto v : latencies)
         sum += v;
-    std::cout << "avg: " << convert_duration(sum / latencies.size(), unit) << unit << std::endl;
+    std::cout << "avg;" << convert_duration(sum / latencies.size(), unit) << std::endl;
+    // std::cout << "avg;" << convert_duration(sum / latencies.size(), unit) << unit << std::endl;
 }
 
 /* Packages up single threaded evaluations so we can use it from within
@@ -211,12 +215,14 @@ void* latency_benchmark(void* arg)
     // unsigned long tid = pthread_self();
 
     BenchThreadArgs* thread_args = (BenchThreadArgs *) arg;
+    ProgramArgs* prog_args = thread_args->pargs;
 
     // ########################################################################
     // Populate store
     // ########################################################################
 
-    std::cout << "populating..." << std::endl;
+    if (prog_args->verbose)
+        std::cout << "populating..." << std::endl;
 
     auto store = thread_args->store;
     auto& pairs = *thread_args->pairs;
@@ -232,7 +238,8 @@ void* latency_benchmark(void* arg)
     // Measure operation latency
     // ########################################################################
 
-    std::cout << "measuring..." << std::endl;
+    if (prog_args->verbose)
+        std::cout << "measuring..." << std::endl;
 
     std::vector<std::chrono::duration<double>> latencies;
     measure(thread_args, latencies);
@@ -241,7 +248,8 @@ void* latency_benchmark(void* arg)
     // Evaluate results
     // ########################################################################
 
-    std::cout << "evaluating..." << std::endl;
+    if (prog_args->verbose)
+        std::cout << "evaluating..." << std::endl;
 
     evaluate(thread_args, latencies);
 
@@ -257,7 +265,9 @@ int run(ProgramArgs* pargs)
     if (!pargs->data_file.empty())
         pairs = fetch_data(pargs->data_file);
 
-    std::cout << "initializing store..." << std::endl;
+    if (pargs->verbose)
+        std::cout << "initializing store..." << std::endl;
+
     midas::pop_type pop;
     if (!midas::init(pop, STORE_FILE, POOL_SIZE)) {
         std::cout << "error: could not open file <" << STORE_FILE << ">!\n";
@@ -293,7 +303,8 @@ int run(ProgramArgs* pargs)
     if(rc != 0)
         std::printf("pthread_attr_setaffinity_np() returned error=%d\n", rc);
 
-    std::cout << "launching worker..." << std::endl;
+    if (pargs->verbose)
+        std::cout << "launching worker..." << std::endl;
 
     /* Start thread */
     rc = pthread_create(&thread, &attr, &latency_benchmark, (void *)(&thread_args));
@@ -430,7 +441,8 @@ int main(int argc, char* argv[])
 
     ProgramArgs pargs;
     parse_args(argc, argv, pargs);
-    print_args(pargs);
+    if (pargs.verbose)
+        print_args(pargs);
     run(&pargs);
 
     return 0;
