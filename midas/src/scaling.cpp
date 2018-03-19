@@ -6,8 +6,10 @@
 #include <cmath>    // std::ceil, std::log10
 #include <algorithm>// std::min_element, std::max_element
 #include <random>   // std::random_device, std::uniform_int_distribution
-#include <pthread.h>
 #include <sstream>
+
+#include <sys/sysinfo.h>
+#include <pthread.h>
 
 #include "utils.hpp"
 #include "midas.hpp"
@@ -15,10 +17,11 @@
 namespace bench {
 
 const std::string STORE_FILE = "/dev/shm/nvdimm_midas";
-const size_t POOL_SIZE = 64ULL * 1024 * 1024;
+// const size_t POOL_SIZE = 64ULL * 1024 * 1024;
+const size_t POOL_SIZE = 256ULL * 1024 * 1024;
 
 enum {
-    NUM_CPUS = 2,
+    NUM_CPUS = 4,
     CPU_OFFSET = 0,
     MAX_THREADS = 256
 };
@@ -113,7 +116,12 @@ void* worker_routine(void* arg)
     std::size_t num_w_snapshot_misses = 0;
     std::size_t num_invalid_txs = 0;
 
-    // std::stringstream ss;
+    if (prog_args->verbose) {
+        std::stringstream ss;
+        auto cpu = sched_getcpu();
+        ss << "worker " << worker_args->id << " runs on core " << cpu << std::endl;
+        std::cout << ss.str();
+    }
 
     // ########################################################################
     // ## START ###############################################################
@@ -300,7 +308,8 @@ int run(ProgramArgs* pargs)
     std::sort(profiles.begin(), profiles.end(),
             [](auto a, auto b){ return a->prob <= b->prob; });
 
-    std::cout << "initializing store..." << std::endl;
+    if (pargs->verbose)
+        std::cout << "initializing store..." << std::endl;
 
     midas::pop_type pop;
     if (!midas::init(pop, STORE_FILE, POOL_SIZE)) {
@@ -313,7 +322,8 @@ int run(ProgramArgs* pargs)
     // Populate store
     // ########################################################################
 
-    std::cout << "populating..." << std::endl;
+    if (pargs->verbose)
+        std::cout << "populating..." << std::endl;
 
     if (pairs.size()) {
         auto tx = store.begin();
@@ -333,6 +343,10 @@ int run(ProgramArgs* pargs)
     pthread_t threads[MAX_THREADS];
     BenchThreadArgs thread_args[MAX_THREADS];
 
+    int cpu_count = get_nprocs();
+    std::cout << "physical cpus: " << (cpu_count / 2) << std::endl;
+    std::cout << "hyper threads: " << cpu_count << std::endl;
+
     for (std::size_t i = 0; i < pargs->num_threads; i++) {
         thread_args[i].pargs = pargs;
         thread_args[i].store = &store;
@@ -346,6 +360,7 @@ int run(ProgramArgs* pargs)
             std::printf("pthread_attr_init() returned error=%d\n", rc);
 
         /* Setup CPU for everybody: don't spawn yet */
+        // cpu = CPU_OFFSET + (i % NUM_CPUS);
         cpu = CPU_OFFSET + (i % NUM_CPUS);
         CPU_ZERO(&(thread_args[i].cpu_set));
         CPU_SET(cpu, &(thread_args[i].cpu_set));
@@ -355,7 +370,8 @@ int run(ProgramArgs* pargs)
         if(rc != 0)
             std::printf("pthread_attr_setaffinity_np() returned error=%d\n", rc);
 
-        std::cout << "launching worker..." << std::endl;
+        if (pargs->verbose)
+            std::cout << "launching worker..." << std::endl;
 
         /* Start thread */
         rc = pthread_create(&threads[i], &attr, &worker_routine, (void *)(&thread_args[i]));
@@ -384,19 +400,20 @@ int run(ProgramArgs* pargs)
     std::chrono::high_resolution_clock::time_point glob_start;
     std::chrono::high_resolution_clock::time_point glob_end;
     for (std::size_t i=0; i<pargs->num_threads; ++i) {
-        std::cout << "----------------------------------------\n";
-        std::cout << "results for thread-" << i << '\n';
-        std::cout << "----------------------------------------\n";
-        std::cout << "#failures      = " << thread_args[i].result.num_failures << std::endl;
-        std::cout << "#r snap misses = " << thread_args[i].result.num_r_snapshot_misses << std::endl;
-        std::cout << "#w snap misses = " << thread_args[i].result.num_w_snapshot_misses << std::endl;
-        // std::cout << "#invalid txs   = " << thread_args[i].result.num_invalid_txs << std::endl;
-        std::cout << "#w/w conflicts = " << (thread_args[i].result.num_ww_conflicts + thread_args[i].result.num_w_snapshot_misses) << std::endl;
-        std::cout << "#r/w conflicts = " << thread_args[i].result.num_rw_conflicts << std::endl;
-        std::cout << "duration       = " << convert_duration(
+        if (pargs->verbose) {
+            std::cout << "----------------------------------------\n";
+            std::cout << "results for thread-" << i << '\n';
+            std::cout << "----------------------------------------\n";
+            std::cout << "failures      = " << thread_args[i].result.num_failures << std::endl;
+            std::cout << "r snap misses = " << thread_args[i].result.num_r_snapshot_misses << std::endl;
+            std::cout << "w snap misses = " << thread_args[i].result.num_w_snapshot_misses << std::endl;
+            // std::cout << "invalid txs   = " << thread_args[i].result.num_invalid_txs << std::endl;
+            std::cout << "w/w conflicts = " << (thread_args[i].result.num_ww_conflicts + thread_args[i].result.num_w_snapshot_misses) << std::endl;
+            std::cout << "r/w conflicts = " << thread_args[i].result.num_rw_conflicts << std::endl;
+            std::cout << "duration      = " << convert_duration(
                 thread_args[i].result.end - thread_args[i].result.start,
                 time_unit) << time_unit << std::endl;
-
+        }
         num_failures += thread_args[i].result.num_failures;
         num_rw_conflicts += thread_args[i].result.num_rw_conflicts;
         num_ww_conflicts += thread_args[i].result.num_ww_conflicts;
@@ -415,16 +432,18 @@ int run(ProgramArgs* pargs)
         }
     }
 
-    std::cout << "----------------------------------------\n";
-    std::cout << "summary" << '\n';
-    std::cout << "----------------------------------------\n";
-    std::cout << "total time           = " << convert_duration(glob_end - glob_start, time_unit) << time_unit << std::endl;
-    std::cout << "total #failures      = " << num_failures << std::endl;
-    std::cout << "total #r snap misses = " << num_r_snapshot_misses << std::endl;
-    std::cout << "total #w snap misses = " << num_w_snapshot_misses << std::endl;
-    std::cout << "total #invalid txs   = " << num_invalid_txs << std::endl;
-    std::cout << "total #w/w conflicts = " << (num_ww_conflicts + num_w_snapshot_misses) << std::endl;
-    std::cout << "total #r/w conflicts = " << num_rw_conflicts << std::endl;
+    if (pargs->verbose) {
+        std::cout << "----------------------------------------\n";
+        std::cout << "summary" << '\n';
+        std::cout << "----------------------------------------\n";
+    }
+    std::cout << "time          = " << convert_duration(glob_end - glob_start, time_unit) << time_unit << std::endl;
+    std::cout << "failures      = " << num_failures << std::endl;
+    std::cout << "r snap misses = " << num_r_snapshot_misses << std::endl;
+    std::cout << "w snap misses = " << num_w_snapshot_misses << std::endl;
+    std::cout << "invalid txs   = " << num_invalid_txs << std::endl;
+    std::cout << "w/w conflicts = " << (num_ww_conflicts + num_w_snapshot_misses) << std::endl;
+    std::cout << "r/w conflicts = " << num_rw_conflicts << std::endl;
 
     // ########################################################################
     // Cleanup
@@ -452,7 +471,8 @@ int main(int argc, char* argv[])
     ProgramArgs pargs;
     parse_args(argc, argv, pargs);
     if (validate_args(pargs)) {
-        print_args(pargs);
+        if (pargs.verbose)
+            print_args(pargs);
         run(&pargs);
     }
     else {

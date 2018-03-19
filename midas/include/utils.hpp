@@ -24,6 +24,7 @@ struct ProgramArgs {
     std::size_t tx_len_min = 2;
     std::size_t tx_len_max = 256;
     std::string unit = "s";
+    bool verbose = false;
 };
 
 enum class OpCode { Get, Put, Ins, Del };
@@ -64,7 +65,7 @@ struct TransactionProfile {
 
 void load_profile(const std::string& path, TransactionProfile::Ptr prof)
 {
-    std::cout << "loading transaction profile from file " << path << "...\n";
+    // std::cout << "loading transaction profile from file " << path << "...\n";
 
     std::ifstream ifs{path};
     if (!ifs.is_open())
@@ -100,20 +101,20 @@ void load_profile(const std::string& path, TransactionProfile::Ptr prof)
         }
     }
 
-    std::cout << "profile: " << path << std::endl;
-    std::cout << "  * name: " << prof->name << std::endl;
-    std::cout << "  * prob: " << prof->prob << std::endl;
-    std::cout << "  * prob_get: " << prof->ops[0].first << std::endl;
-    std::cout << "  * prob_put: " << prof->ops[1].first << std::endl;
-    std::cout << "  * prob_ins: " << prof->ops[2].first << std::endl;
-    std::cout << "  * prob_del: " << prof->ops[3].first << std::endl;
-    std::cout << "  * length_min: " << prof->length_min << std::endl;
-    std::cout << "  * length_max: " << prof->length_max << std::endl;
+    // std::cout << "profile: " << path << std::endl;
+    // std::cout << "  * name: " << prof->name << std::endl;
+    // std::cout << "  * prob: " << prof->prob << std::endl;
+    // std::cout << "  * prob_get: " << prof->ops[0].first << std::endl;
+    // std::cout << "  * prob_put: " << prof->ops[1].first << std::endl;
+    // std::cout << "  * prob_ins: " << prof->ops[2].first << std::endl;
+    // std::cout << "  * prob_del: " << prof->ops[3].first << std::endl;
+    // std::cout << "  * length_min: " << prof->length_min << std::endl;
+    // std::cout << "  * length_max: " << prof->length_max << std::endl;
 }
 
 std::vector<KVPair> fetch_data(const std::string& path)
 {
-    std::cout << "loading sample data from file " << path << "...\n";
+    // std::cout << "loading sample data from file " << path << "...\n";
 
     std::ifstream ifs{path};
     if (!ifs.is_open())
@@ -187,6 +188,8 @@ void usage()
     std::cout << "\t\tThe number of times a transaction is restarted if it fails to commit. (default = " << pargs.num_retries << ")\n";
     std::cout << "\n\t-u, --unit UNIT\n";
     std::cout << "\t\tSets the time unit of used when printing results. Can be one of {s | ms | us | ns} (default = " << pargs.unit << ")\n";
+    std::cout << "\n\t-v, --verbose\n";
+    std::cout << "\t\tPrint additional info.\n";
     std::cout << "\n\t-h, --help\n";
     std::cout << "\t\tShow this help text.\n";
 }
@@ -202,13 +205,14 @@ void parse_args(int argc, char* argv[], ProgramArgs& args)
         { "tx-length-min" , required_argument , NULL , 'i' },
         { "tx-length-max" , required_argument , NULL , 'a' },
         { "unit"          , required_argument , NULL , 'u' },
+        { "verbose"       , no_argument       , NULL , 'v' },
         { "help"          , no_argument       , NULL , 'h' },
         { NULL            , 0                 , NULL , 0 }
     };
 
     char ch;
     // while ((ch = getopt_long(argc, argv, "d:t:n:r:m:o:i:a:u:h", longopts, NULL)) != -1) {
-    while ((ch = getopt_long(argc, argv, "d:t:n:r:p:i:a:u:h", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "d:t:n:r:p:i:a:u:hv", longopts, NULL)) != -1) {
         switch (ch) {
         case 'd': // path to data set
             args.data_path = optarg;
@@ -240,6 +244,10 @@ void parse_args(int argc, char* argv[], ProgramArgs& args)
 
         case 'u': // time unit
             args.unit = optarg;
+            break;
+
+        case 'v': // verbose mode
+            args.verbose = true;
             break;
 
         case 'h':
