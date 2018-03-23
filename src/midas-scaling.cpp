@@ -1,12 +1,7 @@
 #include <iostream> // std::cout, std::endl
-#include <iomanip>  // std::setw, std::setfill
 #include <vector>   // std::vector
-#include <fstream>  // std::ifstream
 #include <chrono>   // std::chrono::high_resolution_clock, std::chrono::duration
-#include <cmath>    // std::ceil, std::log10
-#include <algorithm>// std::min_element, std::max_element
-#include <random>   // std::random_device, std::uniform_int_distribution
-#include <sstream>
+#include <sstream>  // std::stringstream
 
 #include <sys/sysinfo.h>
 #include <pthread.h>
@@ -15,12 +10,14 @@
 
 #include "utils.hpp"
 #include "opcode.hpp"
+#include "workload.hpp"
 
 namespace bench {
 
 const std::string STORE_FILE = "/dev/shm/nvdimm_midas";
 // const size_t POOL_SIZE = 64ULL * 1024 * 1024;
-const size_t POOL_SIZE = 256ULL * 1024 * 1024;
+// const size_t POOL_SIZE = 512ULL * 1024 * 1024;
+const size_t POOL_SIZE = 1024ULL * 1024 * 1024;
 
 enum {
     NUM_CPUS = 4,
@@ -162,13 +159,19 @@ void* worker_routine(void* arg)
 
         // Test if the current transaction has failed due to the previous operation
         if (tx->getStatus() == midas::Transaction::FAILED) {
-            if (num_retries < num_retries_max) {
-                ++num_failures;
-                ++num_retries;
+            ++num_failures;
+            if (num_retries_max) {
+                if (num_retries < num_retries_max) {
+                    ++num_retries;
+                }
+                else {
+                    num_retries = 0;
+                    ++num_canceled_txs;
+                    ++step;
+                }
             }
             else {
                 ++num_canceled_txs;
-                num_retries = 0;
                 ++step;
             }
         }
@@ -176,26 +179,32 @@ void* worker_routine(void* arg)
             // commit transaction; increase error counters if necessary
             const auto status = store->commit(tx);
             if (status != midas::Store::OK) {
-                if (num_retries < num_retries_max) {
-                    ++num_retries;
-                    ++num_failures;
-                    if (status == midas::Store::WW_CONFLICT)
-                        ++num_ww_conflicts;
-                    else if (status == midas::Store::RW_CONFLICT)
-                        ++num_rw_conflicts;
-                    else if (status == midas::Store::INVALID_TX)
-                        ++num_invalid_txs;
-                    continue;
+                ++num_failures;
+                if (status == midas::Store::WW_CONFLICT)
+                    ++num_ww_conflicts;
+                else if (status == midas::Store::RW_CONFLICT)
+                    ++num_rw_conflicts;
+                else if (status == midas::Store::INVALID_TX)
+                    ++num_invalid_txs;
+
+                if (num_retries_max) {
+                    if (num_retries < num_retries_max) {
+                        ++num_retries;
+                    }
+                    else {
+                        num_retries = 0;
+                        ++num_canceled_txs;
+                        ++step;
+                    }
                 }
                 else {
                     ++num_canceled_txs;
+                    ++step;
                 }
             }
-            // else if (num_retries != 0) {
-            //     std::cout << " -- SUCCESS THROUGH RETRY -- \n";
-            // }
-            num_retries = 0;
-            ++step;
+            else {
+                ++step;
+            }
         }
     }
 
@@ -222,8 +231,8 @@ int run(ProgramArgs* pargs)
 {
     // load sample data
     std::vector<KVPair> pairs;
-    if (read_pairs(pargs->data_path, pairs)) {
-        std::cout << "error: could not read pairs from file " << pargs->data_path << "!\n";
+    if (read_pairs(pargs->data_file, pairs)) {
+        std::cout << "error: could not read pairs from file " << pargs->data_file << "!\n";
         return 1;
     }
 
@@ -234,10 +243,10 @@ int run(ProgramArgs* pargs)
         return 1;
     }
 
-    // if (workloads.size() < pargs->num_threads) {
-    //     std::cout << "error: too many threads for given number of workloads (must be less or equal)!\n";
-    //     return 1;
-    // }
+    if (workload.size() < pargs->num_threads) {
+        std::cout << "error: too many threads for given size of workload (must be less or equal)!\n";
+        return 1;
+    }
 
     if (pargs->verbose)
         std::cout << "initializing store..." << std::endl;
