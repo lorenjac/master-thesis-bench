@@ -7,7 +7,7 @@
 namespace app
 {
     constexpr char alpha[] = "abcdefghijklmnopqrstuvwxyz0123456789";
-    constexpr size_t al_size = sizeof(alpha) - 1; // do not count terminal byte
+    constexpr std::size_t alpha_size = sizeof(alpha) - 1; // do not count terminal byte
     constexpr char delim = ';';
 
     void usage()
@@ -15,8 +15,8 @@ namespace app
         std::cout << "usage: gen_data KEY_SIZE VAL_SIZE NUM_PAIRS FILE\n";
     }
 
-    void generateData(const size_t key_size, const size_t val_size,
-            const size_t num_pairs, const std::string file)
+    void generate_pairs(const std::size_t key_size, const std::size_t val_size,
+            const std::size_t num_pairs, const std::string& file)
     {
         char* key = new char[key_size + 1];
         char* val = new char[val_size + 1];
@@ -25,14 +25,14 @@ namespace app
 
         std::random_device rand_dev;
         std::mt19937 rng(rand_dev());
-        std::uniform_int_distribution<> dist(0, al_size - 1);
+        std::uniform_int_distribution<> dist(0, alpha_size - 1);
 
         std::ofstream ofstream(file);
-        for (size_t i=0; i<num_pairs; ++i) {
-            for (size_t i=0; i<key_size; ++i) {
+        for (std::size_t i=0; i<num_pairs; ++i) {
+            for (std::size_t i=0; i<key_size; ++i) {
                 key[i] = alpha[dist(rng)];
             }
-            for (size_t i=0; i<val_size; ++i) {
+            for (std::size_t i=0; i<val_size; ++i) {
                 val[i] = alpha[dist(rng)];
             }
             ofstream << key << delim;
@@ -51,15 +51,12 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    size_t key_size = std::stoi(argv[1]);
-    size_t val_size = std::stoi(argv[2]);
-    size_t num_pairs = std::stoi(argv[3]);
-    std::string file = argv[4];
-    // std::string file;
-    // if (argc > 4)
-    //     file = argv[4];
+    const std::size_t key_size = std::stoi(argv[1]);
+    const std::size_t val_size = std::stoi(argv[2]);
+    const std::size_t num_pairs = std::stoi(argv[3]);
+    const std::string file = argv[4];
 
-    app::generateData(key_size, val_size, num_pairs, file);
+    app::generate_pairs(key_size, val_size, num_pairs, file);
 
     return 0;
 }
