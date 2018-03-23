@@ -1,0 +1,11 @@
+{
+    "mixed": {
+        "prob": 100,
+        "ops": {
+            "get": 84,
+            "put": 16
+        },
+        "length_min": 2,
+        "length_max": 512
+    }
+}
