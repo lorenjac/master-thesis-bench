@@ -35,6 +35,7 @@ struct BenchThreadResult {
     std::size_t num_r_snapshot_misses = 0;
     std::size_t num_w_snapshot_misses = 0;
     std::size_t num_invalid_txs = 0;
+    std::size_t num_canceled_txs = 0;
     std::chrono::high_resolution_clock::time_point start;
     std::chrono::high_resolution_clock::time_point end;
 };
@@ -80,10 +81,12 @@ void* worker_routine(void* arg)
     // auto pid = pthread_self();
     // auto pid = worker_args->id;
 
+    const auto id = worker_args->id;
     const auto store = worker_args->store;
     const auto pairs = worker_args->pairs;
-    const auto workload = worker_args->workload;
     const auto time_unit = prog_args->unit;
+    const auto num_retries_max = prog_args->num_retries;
+    const auto& workload = *worker_args->workload;
 
     std::string result;
 
@@ -94,11 +97,12 @@ void* worker_routine(void* arg)
     std::size_t num_r_snapshot_misses = 0;
     std::size_t num_w_snapshot_misses = 0;
     std::size_t num_invalid_txs = 0;
+    std::size_t num_canceled_txs = 0;
 
     if (prog_args->verbose) {
         std::stringstream ss;
         auto cpu = sched_getcpu();
-        ss << "worker " << worker_args->id << " runs on core " << cpu << std::endl;
+        ss << "worker " << id << " runs on core " << cpu << std::endl;
         std::cout << ss.str();
     }
 
@@ -108,7 +112,24 @@ void* worker_routine(void* arg)
 
     const auto time_start = std::chrono::high_resolution_clock::now();
 
-    for (const auto& workload_tx : *workload) {
+    // FIXME division remainder may be lost here
+    const std::size_t num_steps_max = workload.size() / prog_args->num_threads;
+    const std::size_t begin = id * num_steps_max;
+    const std::size_t end = begin + num_steps_max;
+
+    // if (prog_args->verbose) {
+    //     std::stringstream ss;
+    //     ss << "id = " << id << std::endl;
+    //     ss << "workload_size = " << workload.size() << std::endl;
+    //     ss << "num_steps_max = " << num_steps_max << std::endl;
+    //     ss << "begin = " << begin << std::endl;
+    //     ss << "end = " << end << std::endl;
+    //     std::cout << ss.str();
+    // }
+
+    std::size_t num_retries = 0;
+    for (std::size_t step = begin; step < end; ) {
+        const auto& workload_tx = workload[step];
 
         // begin transaction
         auto tx = store->begin();
@@ -124,15 +145,6 @@ void* worker_routine(void* arg)
                 if (auto ret = store->read(tx, key, result); ret != midas::Store::OK) {
                     if (ret == midas::Store::VALUE_NOT_FOUND)
                         ++num_r_snapshot_misses;
-                    // ss << "[" << pid << "] Get -> " << print_midas_ret(ret);
-                    // ss << "[" << pid << ": tx=" << i << '/' << num_txs;
-                    // ss << ", op=" << step << '/' << tx_length;
-                    // ss << " | id=" << tx->getId();
-                    // ss << ", ts=" << tx->getBegin() << "] ";
-                    // ss << "Get -> " << print_midas_ret(ret);
-                    // std::cout << ss.str() << std::endl;
-                    // ss.str("");
-                    // exit(0);
                 }
                 break;
 
@@ -140,16 +152,6 @@ void* worker_routine(void* arg)
                 if (auto ret = store->write(tx, key, val); ret != midas::Store::OK) {
                     if (ret == midas::Store::VALUE_NOT_FOUND)
                         ++num_w_snapshot_misses;
-                    // ss << "[" << pid << ": tx=" << i << '/' << num_txs;
-                    // ss << ", op=" << step << '/' << tx_length;
-                    // ss << " | id=" << tx->getId();
-                    // ss << ", ts=" << tx->getBegin() << "] ";
-                    // ss << "Put -> " << print_midas_ret(ret);
-                    // std::cout << ss.str() << std::endl;
-                    // std::cerr << ss.str() << std::endl;
-                    // ss.str("");
-                    // store->print();
-                    // exit(0);
                 }
                 break;
 
@@ -158,25 +160,42 @@ void* worker_routine(void* arg)
             }
         }
 
-        if (tx->getStatus().load() == midas::Transaction::FAILED) {
-            ++num_failures;
-            continue;
-        }
-
-        // commit transaction; increase error counters if necessary
-        const auto status = store->commit(tx);
-        // ss << "[" << pid << "] commit -> " << print_midas_ret(status) << std::endl;
-        // std::cout << ss.str();
-        // ss.str("");
-        if (status != midas::Store::OK) {
-            ++num_failures;
-            if (status == midas::Store::WW_CONFLICT)
-                ++num_ww_conflicts;
-            else if (status == midas::Store::RW_CONFLICT)
-                ++num_rw_conflicts;
-            else if (status == midas::Store::INVALID_TX) {
-                ++num_invalid_txs;
+        // Test if the current transaction has failed due to the previous operation
+        if (tx->getStatus() == midas::Transaction::FAILED) {
+            if (num_retries < num_retries_max) {
+                ++num_failures;
+                ++num_retries;
             }
+            else {
+                ++num_canceled_txs;
+                num_retries = 0;
+                ++step;
+            }
+        }
+        else {
+            // commit transaction; increase error counters if necessary
+            const auto status = store->commit(tx);
+            if (status != midas::Store::OK) {
+                if (num_retries < num_retries_max) {
+                    ++num_retries;
+                    ++num_failures;
+                    if (status == midas::Store::WW_CONFLICT)
+                        ++num_ww_conflicts;
+                    else if (status == midas::Store::RW_CONFLICT)
+                        ++num_rw_conflicts;
+                    else if (status == midas::Store::INVALID_TX)
+                        ++num_invalid_txs;
+                    continue;
+                }
+                else {
+                    ++num_canceled_txs;
+                }
+            }
+            // else if (num_retries != 0) {
+            //     std::cout << " -- SUCCESS THROUGH RETRY -- \n";
+            // }
+            num_retries = 0;
+            ++step;
         }
     }
 
@@ -187,6 +206,7 @@ void* worker_routine(void* arg)
     // ########################################################################
 
     worker_args->result.num_failures = num_failures;
+    worker_args->result.num_canceled_txs = num_canceled_txs;
     worker_args->result.num_rw_conflicts = num_rw_conflicts;
     worker_args->result.num_ww_conflicts = num_ww_conflicts;
     worker_args->result.num_r_snapshot_misses = num_r_snapshot_misses;
@@ -207,17 +227,17 @@ int run(ProgramArgs* pargs)
         return 1;
     }
 
-    // load workloads
-    std::vector<tools::workload_t> workloads;
-    if (read_workloads(pargs->workload_file, workloads)) {
-        std::cout << "error: could not read workloads from file " << pargs->workload_file << "!\n";
+    // load workload
+    tools::workload_t workload;
+    if (tools::parseWorkload(pargs->workload_file, workload)) {
+        std::cout << "error: could not read workload from file " << pargs->workload_file << "!\n";
         return 1;
     }
 
-    if (workloads.size() < pargs->num_threads) {
-        std::cout << "error: too many threads for given number of workloads (must be less or equal)!\n";
-        return 1;
-    }
+    // if (workloads.size() < pargs->num_threads) {
+    //     std::cout << "error: too many threads for given number of workloads (must be less or equal)!\n";
+    //     return 1;
+    // }
 
     if (pargs->verbose)
         std::cout << "initializing store..." << std::endl;
@@ -262,7 +282,7 @@ int run(ProgramArgs* pargs)
         thread_args[i].pargs = pargs;
         thread_args[i].store = &store;
         thread_args[i].pairs = &pairs;
-        thread_args[i].workload = &workloads[i];
+        thread_args[i].workload = &workload;
         thread_args[i].id = i;
 
         /* Create Attributes */
@@ -308,6 +328,7 @@ int run(ProgramArgs* pargs)
     std::size_t num_r_snapshot_misses = 0;
     std::size_t num_w_snapshot_misses = 0;
     std::size_t num_invalid_txs = 0;
+    std::size_t num_canceled_txs = 0;
     std::chrono::high_resolution_clock::time_point glob_start;
     std::chrono::high_resolution_clock::time_point glob_end;
     for (std::size_t i=0; i<pargs->num_threads; ++i) {
@@ -316,6 +337,7 @@ int run(ProgramArgs* pargs)
             std::cout << "results for thread-" << i << '\n';
             std::cout << "----------------------------------------\n";
             std::cout << "failures      = " << thread_args[i].result.num_failures << std::endl;
+            std::cout << "canceled      = " << thread_args[i].result.num_canceled_txs << std::endl;
             std::cout << "r snap misses = " << thread_args[i].result.num_r_snapshot_misses << std::endl;
             std::cout << "w snap misses = " << thread_args[i].result.num_w_snapshot_misses << std::endl;
             // std::cout << "invalid txs   = " << thread_args[i].result.num_invalid_txs << std::endl;
@@ -331,6 +353,7 @@ int run(ProgramArgs* pargs)
         num_r_snapshot_misses += thread_args[i].result.num_r_snapshot_misses;
         num_w_snapshot_misses += thread_args[i].result.num_w_snapshot_misses;
         num_invalid_txs += thread_args[i].result.num_invalid_txs;
+        num_canceled_txs += thread_args[i].result.num_canceled_txs;
         if (i == 0) {
             glob_start = thread_args[i].result.start;
             glob_end = thread_args[i].result.end;
@@ -348,13 +371,16 @@ int run(ProgramArgs* pargs)
         std::cout << "summary" << '\n';
         std::cout << "----------------------------------------\n";
     }
-    std::cout << "time          = " << convert_duration(glob_end - glob_start, time_unit) << time_unit << std::endl;
+    const auto duration = convert_duration(glob_end - glob_start, time_unit);
+    std::cout << "time          = " << duration << ' ' << time_unit << std::endl;
     std::cout << "failures      = " << num_failures << std::endl;
+    std::cout << "canceled      = " << num_canceled_txs << std::endl;
     std::cout << "r snap misses = " << num_r_snapshot_misses << std::endl;
     std::cout << "w snap misses = " << num_w_snapshot_misses << std::endl;
     std::cout << "invalid txs   = " << num_invalid_txs << std::endl;
     std::cout << "w/w conflicts = " << (num_ww_conflicts + num_w_snapshot_misses) << std::endl;
     std::cout << "r/w conflicts = " << num_rw_conflicts << std::endl;
+    std::cout << "throughput    = " << ((workload.size() - num_canceled_txs) / duration) << "/" << time_unit << std::endl;
 
     // ########################################################################
     // Cleanup

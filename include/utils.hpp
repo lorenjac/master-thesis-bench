@@ -26,31 +26,6 @@ struct ProgramArgs {
     bool verbose = false;
 };
 
-int read_workload(const std::string& path,
-        std::vector<tools::workload_t>& workloads)
-{
-    auto& work = workloads.emplace_back();
-    if (tools::parseWorkload(path, work))
-        return 1;
-
-    return 0;
-}
-
-int read_workloads(const std::string& path,
-        std::vector<tools::workload_t>& workloads)
-{
-    std::ifstream ifstream(path);
-    if (!ifstream.is_open())
-        return 1;
-
-    std::string line;
-    while (std::getline(ifstream, line)) {
-        if (line.empty() || read_workload(line, workloads))
-            return 1;
-    }
-    return 0;
-}
-
 int read_pairs(const std::string& path, std::vector<KVPair>& pairs)
 {
     // std::cout << "loading sample data from file " << path << "...\n";
