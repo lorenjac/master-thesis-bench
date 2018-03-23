@@ -1,6 +1,6 @@
 # Compiler Flags
 
-CXX=g++-7
+CXX=g++
 CXXFLAGS=-std=c++1z -Wall -O2
 
 # Dependencies

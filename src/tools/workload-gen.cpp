@@ -78,6 +78,9 @@ void run(ProgramArgs& args)
     if (parseTransactionProfiles(args.prof_path, profiles))
         return;
 
+    // std::sort(profiles.begin(), profiles.end(),
+    //         [](auto a, auto b){ return a->prob <= b->prob; });
+
     const auto num_txs = args.num_txs;
     const auto tx_len_min = args.tx_len_min;
     const auto tx_len_max = args.tx_len_max;

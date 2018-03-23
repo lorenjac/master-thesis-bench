@@ -1,7 +1,7 @@
 # Compiler Flags
 
-CC=g++ -std=c++1z
-CFLAGS=-Wall -O2
+CC=g++
+CFLAGS=-std=c++1z -Wall -O2
 
 # Inputs
 
@@ -20,9 +20,9 @@ BIN_DIR=bin
 
 # Targets
 
-all : baseline
+all : echo-baseline
 
-baseline :
+echo-baseline :
 	$(CC) -c $(CFLAGS) $(INCLUDE) $(SRC_DIR)/$@.cpp -o $(BIN_DIR)/$@.o
 	$(CC) $(CFLAGS) $(BIN_DIR)/$@.o $(LDFLAGS) -o $(BIN_DIR)/$@
 

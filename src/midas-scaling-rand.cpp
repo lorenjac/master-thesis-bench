@@ -11,10 +11,8 @@
 #include <sys/sysinfo.h>
 #include <pthread.h>
 
+#include "utils-rand.hpp"
 #include "midas.hpp"
-
-#include "utils.hpp"
-#include "opcode.hpp"
 
 namespace bench {
 
@@ -45,7 +43,7 @@ struct BenchThreadArgs {
     ProgramArgs* pargs;
     midas::Store* store;
     std::vector<KVPair>* pairs;
-    tools::workload_t* workload;
+    std::vector<TransactionProfile::Ptr>* tx_profiles;
     BenchThreadResult result;
 };
 
@@ -82,9 +80,32 @@ void* worker_routine(void* arg)
 
     const auto store = worker_args->store;
     const auto pairs = worker_args->pairs;
-    const auto workload = worker_args->workload;
+    const auto num_txs = prog_args->num_txs;
+    const auto tx_profiles = worker_args->tx_profiles;
+    const auto tx_len_min = prog_args->tx_len_min;
+    const auto tx_len_max = prog_args->tx_len_max;
     const auto time_unit = prog_args->unit;
 
+    // Pseudo-random number generator
+    std::random_device dev;
+    std::mt19937 rng(dev());
+
+    // Distribution for selecting profiles, operations
+    std::uniform_int_distribution<> prob_dist{1, 100};
+
+    // Distribution for selecting pairs
+    std::uniform_int_distribution<> pair_dist{0, static_cast<int>(pairs->size() - 1)};
+
+    // Distribution for selecting #ops in a transaction
+    double tx_len_mean = (tx_len_max - tx_len_min) / 2.0;
+    std::normal_distribution<> len_dist{
+            tx_len_mean,
+            std::sqrt(tx_len_mean - tx_len_min)};
+
+    // Runtime variables
+    int rand = 0;
+    OpCode opcode = OpCode::Get;
+    TransactionProfile::Ptr prof;
     std::string result;
 
     // Counters
@@ -108,19 +129,75 @@ void* worker_routine(void* arg)
 
     const auto time_start = std::chrono::high_resolution_clock::now();
 
-    for (const auto& workload_tx : *workload) {
+    for (std::size_t i=0; i<num_txs; ++i) {
+        // select random tx profile (using probabilities from profiles)
+        rand = prob_dist(rng);
+        for (auto const& p : *tx_profiles) {
+            if (rand <= p->prob) {
+                prof = p;
+                break;
+            }
+            rand -= p->prob;
+        }
+
+        // std::cout << pid << "> selected profile: " << prof->name << std::endl;
+        // ss << "[" << pid << "] selected profile: " << prof->name << std::endl;
+        // ss << "[" << pid << ": tx=" << i << '/' << num_txs << "] ";
+        // ss << "selected profile: " << prof->name << std::endl;
+        // std::cout << ss.str();
+        // ss.str("");
+
+        // select random tx length (using normal distribution based on profile)
+        auto tx_length = std::round(len_dist(rng));
+
+        // std::cout << pid << "> selected tx length: " << tx_length << std::endl;
+        // ss << "[" << pid << "] selected tx length: " << tx_length << std::endl;
+        // ss << "[" << pid << ": tx=" << i << '/' << num_txs << "] ";
+        // ss << "selected tx length: " << tx_length << std::endl;
+        // std::cout << ss.str();
+        // ss.str("");
 
         // begin transaction
         auto tx = store->begin();
 
-        for (const auto& workload_cmd : workload_tx) {
+        // loop for $tx_length steps
+        for (std::size_t step=0; step<tx_length; ++step) {
+            // select random operation (using custom distribution in profile)
+            rand = prob_dist(rng);
+            for (auto const& [prob, op] : prof->ops) {
+                if (rand <= prob) {
+                    opcode = op;
+                    break;
+                }
+                rand -= prob;
+            }
 
-            // select pair
-            const auto& [key, val] = (*pairs)[workload_cmd.pos];
+            // std::cout << pid << "> selected operation: " << opcode << std::endl;
+            // ss << "[" << pid << "] selected operation: " << opcode << std::endl;
+            // ss << "[" << pid << ": tx=" << i << '/' << num_txs;
+            // ss << ", op=" << step << '/' << tx_length;
+            // ss << " | id=" << tx->getId();
+            // ss << ", ts=" << tx->getBegin() << "] ";
+            // ss << "selected operation: " << opcode << std::endl;
+            // std::cout << ss.str();
+            // ss.str("");
+
+            // select random pair (using uniform distribution)
+            const auto& [key, val] = (*pairs)[pair_dist(rng)];
+
+            // std::cout << pid << "> selected pair: [" << key << ", " << val << "]" << std::endl;
+            // ss << "[" << pid << "] selected pair: [" << key << ", " << val << "]" << std::endl;
+            // ss << "[" << pid << ": tx=" << i << '/' << num_txs;
+            // ss << ", op=" << step << '/' << tx_length;
+            // ss << " | id=" << tx->getId();
+            // ss << ", ts=" << tx->getBegin() << "] ";
+            // ss << "selected pair: [" << key << ", " << val << "]" << std::endl;
+            // std::cout << ss.str();
+            // ss.str("");
 
             // perform operation
-            switch (workload_cmd.opcode) {
-            case tools::tx_opcode_t::Get:
+            switch (opcode) {
+            case OpCode::Get:
                 if (auto ret = store->read(tx, key, result); ret != midas::Store::OK) {
                     if (ret == midas::Store::VALUE_NOT_FOUND)
                         ++num_r_snapshot_misses;
@@ -136,7 +213,7 @@ void* worker_routine(void* arg)
                 }
                 break;
 
-            case tools::tx_opcode_t::Put:
+            case OpCode::Put:
                 if (auto ret = store->write(tx, key, val); ret != midas::Store::OK) {
                     if (ret == midas::Store::VALUE_NOT_FOUND)
                         ++num_w_snapshot_misses;
@@ -149,6 +226,24 @@ void* worker_routine(void* arg)
                     // std::cerr << ss.str() << std::endl;
                     // ss.str("");
                     // store->print();
+                    // exit(0);
+                }
+                break;
+
+            case OpCode::Ins:
+                if (auto ret = store->write(tx, key, val); ret != midas::Store::OK) {
+                    // ss << "[" << pid << "] Ins -> " << print_midas_ret(ret);
+                    // std::cout << ss.str() << std::endl;
+                    // ss.str("");
+                    // exit(0);
+                }
+                break;
+
+            case OpCode::Del:
+                if (auto ret = store->drop(tx, key); ret != midas::Store::OK) {
+                    // ss << "[" << pid << "] Del -> " << print_midas_ret(ret);
+                    // std::cout << ss.str() << std::endl;
+                    // ss.str("");
                     // exit(0);
                 }
                 break;
@@ -201,23 +296,17 @@ void* worker_routine(void* arg)
 int run(ProgramArgs* pargs)
 {
     // load sample data
-    std::vector<KVPair> pairs;
-    if (read_pairs(pargs->data_path, pairs)) {
-        std::cout << "error: could not read pairs from file " << pargs->data_path << "!\n";
-        return 1;
-    }
+    auto pairs = fetch_data(pargs->data_path);
 
-    // load workloads
-    std::vector<tools::workload_t> workloads;
-    if (read_workloads(pargs->workload_file, workloads)) {
-        std::cout << "error: could not read workloads from file " << pargs->workload_file << "!\n";
-        return 1;
+    // load profiles
+    std::vector<TransactionProfile::Ptr> profiles;
+    for (const auto& fpath : pargs->tx_profile_paths) {
+        auto prof = std::make_shared<TransactionProfile>();
+        load_profile(fpath, prof);
+        profiles.push_back(prof);
     }
-
-    if (workloads.size() < pargs->num_threads) {
-        std::cout << "error: too many threads for given number of workloads (must be less or equal)!\n";
-        return 1;
-    }
+    std::sort(profiles.begin(), profiles.end(),
+            [](auto a, auto b){ return a->prob <= b->prob; });
 
     if (pargs->verbose)
         std::cout << "initializing store..." << std::endl;
@@ -262,7 +351,7 @@ int run(ProgramArgs* pargs)
         thread_args[i].pargs = pargs;
         thread_args[i].store = &store;
         thread_args[i].pairs = &pairs;
-        thread_args[i].workload = &workloads[i];
+        thread_args[i].tx_profiles = &profiles;
         thread_args[i].id = i;
 
         /* Create Attributes */
