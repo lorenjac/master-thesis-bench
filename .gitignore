@@ -1,8 +1,5 @@
-echo/bin
-echo/lib
-midas/bin
-midas/lib
-utils/bin
-log
 assets
+bin
+lib
+log
 .DS_Store
