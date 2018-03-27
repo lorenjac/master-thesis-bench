@@ -20,7 +20,7 @@ const std::string STORE_FILE = "/dev/shm/nvdimm_midas";
 const size_t POOL_SIZE = 1024ULL * 1024 * 1024;
 
 enum {
-    NUM_CPUS = 4,
+    NUM_CPUS = 32,
     CPU_OFFSET = 0,
     MAX_THREADS = 256
 };
@@ -400,6 +400,9 @@ int run(ProgramArgs* pargs)
         std::printf("pthread_attr_destroy() returned error=%d\n", rc);
 
     pop.close();
+
+    std::_Exit(0);
+
     return 0;
 }
 
