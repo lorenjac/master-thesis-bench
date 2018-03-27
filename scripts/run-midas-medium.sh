@@ -1,14 +1,23 @@
 #!/bin/bash
 
-num_threads=$1
-num_runs=$2
+data_file=assets/data/medium-128-1024-65536.csv
+workload_file=assets/workloads/medium-oltp-2-64-1000-1.json
+num_threads_max=32
 
-echo "rm -f /dev/shm/nvdimm_midas && PMEM_IS_PMEM_FORCE=1 ./bin/midas-scaling -d assets/data/medium-128-1024-65536.csv -w assets/workloads/medium-oltp-2-64-1000-1.json -t $num_threads" > "midas-medium-t$num_threads-magni.log"
+num_runs=$1
 
-#for i in {1..$num_runs}
-for ((i=1; i<=$num_runs; i++))
-do 
-    echo "starting run #$i ..."
-    rm -f /dev/shm/nvdimm_midas && PMEM_IS_PMEM_FORCE=1 ./bin/midas-scaling -d assets/data/medium-128-1024-65536.csv -w assets/workloads/medium-oltp-2-64-1000-1.json -t $num_threads >> "midas-medium-t$num_threads-magni.log"
-    echo "done!"
+echo "dataset: $data_file"
+echo "workload: $workload_file"
+echo "num_threads_max: $num_threads_max"
+echo "#runs per config: $num_runs"
+
+for ((n=1; n<=$num_threads_max; n=2*n))
+do
+    echo "running benchmark with $n threads"
+    for ((i=1; i<=$num_runs; i++))
+    do
+        echo -n "starting run $i/$num_runs ..."
+        rm -f /dev/shm/nvdimm_midas && PMEM_IS_PMEM_FORCE=1 ./bin/midas-scaling --data $data_file --workload $workload_file --num-threads $n >> log/midas-medium-$n.log
+        echo "done!"
+    done
 done

@@ -17,7 +17,8 @@ namespace bench {
 const std::string STORE_FILE = "/dev/shm/nvdimm_midas";
 // const size_t POOL_SIZE = 64ULL * 1024 * 1024;
 // const size_t POOL_SIZE = 512ULL * 1024 * 1024;
-const size_t POOL_SIZE = 1024ULL * 1024 * 1024;
+// const size_t POOL_SIZE = 1024ULL * 1024 * 1024;
+const size_t POOL_SIZE = 2048ULL * 1024 * 1024; // required for 64-256-1000 OLTP workload with 512M of 128-1024 pairs
 
 enum {
     NUM_CPUS = 32,
@@ -287,6 +288,8 @@ int run(ProgramArgs* pargs)
     std::cout << "physical cpus: " << (cpu_count / 2) << std::endl;
     std::cout << "hyper threads: " << cpu_count << std::endl;
 
+    const auto time_bench_start = std::chrono::high_resolution_clock::now();
+
     for (std::size_t i = 0; i < pargs->num_threads; i++) {
         thread_args[i].pargs = pargs;
         thread_args[i].store = &store;
@@ -330,6 +333,8 @@ int run(ProgramArgs* pargs)
             std::printf("pthread_join() returned error=%d\n", rc);
     }
 
+    const auto time_bench_end = std::chrono::high_resolution_clock::now();
+
     const auto time_unit = pargs->unit;
     std::size_t num_failures = 0;
     std::size_t num_rw_conflicts = 0;
@@ -338,8 +343,8 @@ int run(ProgramArgs* pargs)
     std::size_t num_w_snapshot_misses = 0;
     std::size_t num_invalid_txs = 0;
     std::size_t num_canceled_txs = 0;
-    std::chrono::high_resolution_clock::time_point glob_start;
-    std::chrono::high_resolution_clock::time_point glob_end;
+    // std::chrono::high_resolution_clock::time_point time_bench_start;
+    // std::chrono::high_resolution_clock::time_point time_bench_end;
     for (std::size_t i=0; i<pargs->num_threads; ++i) {
         if (pargs->verbose) {
             std::cout << "----------------------------------------\n";
@@ -363,16 +368,16 @@ int run(ProgramArgs* pargs)
         num_w_snapshot_misses += thread_args[i].result.num_w_snapshot_misses;
         num_invalid_txs += thread_args[i].result.num_invalid_txs;
         num_canceled_txs += thread_args[i].result.num_canceled_txs;
-        if (i == 0) {
-            glob_start = thread_args[i].result.start;
-            glob_end = thread_args[i].result.end;
-        }
-        else {
-            if (thread_args[i].result.start < glob_start)
-                glob_start = thread_args[i].result.start;
-            if (thread_args[i].result.end > glob_end)
-                glob_end = thread_args[i].result.end;
-        }
+        // if (i == 0) {
+        //     time_bench_start = thread_args[i].result.start;
+        //     time_bench_end = thread_args[i].result.end;
+        // }
+        // else {
+        //     if (thread_args[i].result.start < time_bench_start)
+        //         time_bench_start = thread_args[i].result.start;
+        //     if (thread_args[i].result.end > time_bench_end)
+        //         time_bench_end = thread_args[i].result.end;
+        // }
     }
 
     if (pargs->verbose) {
@@ -380,16 +385,16 @@ int run(ProgramArgs* pargs)
         std::cout << "summary" << '\n';
         std::cout << "----------------------------------------\n";
     }
-    const auto duration = convert_duration(glob_end - glob_start, time_unit);
-    std::cout << "time          = " << duration << ' ' << time_unit << std::endl;
-    std::cout << "failures      = " << num_failures << std::endl;
-    std::cout << "canceled      = " << num_canceled_txs << std::endl;
-    std::cout << "r snap misses = " << num_r_snapshot_misses << std::endl;
-    std::cout << "w snap misses = " << num_w_snapshot_misses << std::endl;
-    std::cout << "invalid txs   = " << num_invalid_txs << std::endl;
-    std::cout << "w/w conflicts = " << (num_ww_conflicts + num_w_snapshot_misses) << std::endl;
-    std::cout << "r/w conflicts = " << num_rw_conflicts << std::endl;
-    std::cout << "throughput    = " << ((workload.size() - num_canceled_txs) / duration) << "/" << time_unit << std::endl;
+    const auto duration = convert_duration(time_bench_end - time_bench_start, time_unit);
+    std::cout << "time=" << duration << ' ' << time_unit << std::endl;
+    std::cout << "failures=" << num_failures << std::endl;
+    std::cout << "canceled=" << num_canceled_txs << std::endl;
+    std::cout << "r snap misses=" << num_r_snapshot_misses << std::endl;
+    std::cout << "w snap misses=" << num_w_snapshot_misses << std::endl;
+    std::cout << "invalid txs=" << num_invalid_txs << std::endl;
+    std::cout << "ww conflicts=" << (num_ww_conflicts + num_w_snapshot_misses) << std::endl;
+    std::cout << "rw conflicts=" << num_rw_conflicts << std::endl;
+    std::cout << "throughput=" << ((workload.size() - num_canceled_txs) / duration) << "/" << time_unit << std::endl;
 
     // ########################################################################
     // Cleanup
