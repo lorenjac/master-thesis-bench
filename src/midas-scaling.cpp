@@ -18,13 +18,9 @@ const std::string STORE_FILE = "/dev/shm/nvdimm_midas";
 // const size_t POOL_SIZE = 64ULL * 1024 * 1024;
 // const size_t POOL_SIZE = 512ULL * 1024 * 1024;
 // const size_t POOL_SIZE = 1024ULL * 1024 * 1024;
-const size_t POOL_SIZE = 2048ULL * 1024 * 1024; // required for 64-256-1000 OLTP workload with 512M of 128-1024 pairs
+const std::size_t POOL_SIZE = 2048ULL * 1024 * 1024; // required for 64-256-1000 OLTP workload with 512M of 128-1024 pairs
 
-enum {
-    NUM_CPUS = 32,
-    CPU_OFFSET = 0,
-    MAX_THREADS = 256
-};
+const std::size_t NUM_THREADS_MAX = 256;
 
 struct BenchThreadResult {
     std::size_t num_failures = 0;
@@ -114,16 +110,6 @@ void* worker_routine(void* arg)
     const std::size_t num_steps_max = workload.size() / prog_args->num_threads;
     const std::size_t begin = id * num_steps_max;
     const std::size_t end = begin + num_steps_max;
-
-    // if (prog_args->verbose) {
-    //     std::stringstream ss;
-    //     ss << "id = " << id << std::endl;
-    //     ss << "workload_size = " << workload.size() << std::endl;
-    //     ss << "num_steps_max = " << num_steps_max << std::endl;
-    //     ss << "begin = " << begin << std::endl;
-    //     ss << "end = " << end << std::endl;
-    //     std::cout << ss.str();
-    // }
 
     std::size_t num_retries = 0;
     for (std::size_t step = begin; step < end; ) {
@@ -281,12 +267,13 @@ int run(ProgramArgs* pargs)
     int rc;
     int cpu;
     pthread_attr_t attr;
-    pthread_t threads[MAX_THREADS];
-    BenchThreadArgs thread_args[MAX_THREADS];
+    pthread_t threads[NUM_THREADS_MAX];
+    BenchThreadArgs thread_args[NUM_THREADS_MAX];
 
-    int cpu_count = get_nprocs();
-    std::cout << "physical cpus: " << (cpu_count / 2) << std::endl;
-    std::cout << "hyper threads: " << cpu_count << std::endl;
+    const auto cpu_offset = pargs->cpu_offset;
+    const auto num_cpus = get_nprocs() / pargs->smt_ratio;
+    std::cout << "physical cpus: " << num_cpus << std::endl;
+    std::cout << "logical cpus: " << (num_cpus * pargs->smt_ratio) << std::endl;
 
     const auto time_bench_start = std::chrono::high_resolution_clock::now();
 
@@ -304,7 +291,7 @@ int run(ProgramArgs* pargs)
 
         /* Setup CPU for everybody: don't spawn yet */
         // cpu = CPU_OFFSET + (i % NUM_CPUS);
-        cpu = CPU_OFFSET + (i % NUM_CPUS);
+        cpu = cpu_offset + (i % num_cpus);
         CPU_ZERO(&(thread_args[i].cpu_set));
         CPU_SET(cpu, &(thread_args[i].cpu_set));
 
@@ -343,8 +330,6 @@ int run(ProgramArgs* pargs)
     std::size_t num_w_snapshot_misses = 0;
     std::size_t num_invalid_txs = 0;
     std::size_t num_canceled_txs = 0;
-    // std::chrono::high_resolution_clock::time_point time_bench_start;
-    // std::chrono::high_resolution_clock::time_point time_bench_end;
     for (std::size_t i=0; i<pargs->num_threads; ++i) {
         if (pargs->verbose) {
             std::cout << "----------------------------------------\n";
@@ -368,16 +353,6 @@ int run(ProgramArgs* pargs)
         num_w_snapshot_misses += thread_args[i].result.num_w_snapshot_misses;
         num_invalid_txs += thread_args[i].result.num_invalid_txs;
         num_canceled_txs += thread_args[i].result.num_canceled_txs;
-        // if (i == 0) {
-        //     time_bench_start = thread_args[i].result.start;
-        //     time_bench_end = thread_args[i].result.end;
-        // }
-        // else {
-        //     if (thread_args[i].result.start < time_bench_start)
-        //         time_bench_start = thread_args[i].result.start;
-        //     if (thread_args[i].result.end > time_bench_end)
-        //         time_bench_end = thread_args[i].result.end;
-        // }
     }
 
     if (pargs->verbose) {

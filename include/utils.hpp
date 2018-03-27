@@ -17,6 +17,8 @@ using KVPair = std::pair<std::string, std::string>;
 struct ProgramArgs {
     std::string data_file;
     std::string workload_file;
+    std::size_t cpu_offset = 0;
+    std::size_t smt_ratio = 2;
     std::size_t num_threads = 1;
     std::size_t num_retries = 0;
     std::string unit = "s";
@@ -76,6 +78,11 @@ void usage()
     std::cout << "\t\tPath to a file containing the workload to be executed.\n";
     std::cout << "\n\t-t, --num-threads INT\n";
     std::cout << "\t\tThe number of worker threads to spawn. (default = " << pargs.num_threads << ")\n";
+    std::cout << "\n\t-o, --cpu-offset INT\n";
+    std::cout << "\t\tId of the first CPU to be used out of [0..NUM_CPUS-1].\n";
+    std::cout << "\t\tAll CPUs with an id less than this number will not be used. (default = " << pargs.cpu_offset << ")\n";
+    std::cout << "\n\t-m, --smt-ratio INT\n";
+    std::cout << "\t\tThe number of hardware threads per CPU. (default = " << pargs.smt_ratio << ")\n";
     std::cout << "\n\t-r, --num-retries INT\n";
     std::cout << "\t\tThe number of times a transaction is restarted if it fails to commit. (default = " << pargs.num_retries << ")\n";
     std::cout << "\n\t-u, --unit UNIT\n";
@@ -92,6 +99,8 @@ void parse_args(int argc, char* argv[], ProgramArgs& args)
         { "data"          , required_argument , NULL , 'd' },
         { "workload"      , required_argument , NULL , 'w' },
         { "num-threads"   , required_argument , NULL , 't' },
+        { "cpu-offset"    , required_argument , NULL , 'o' },
+        { "smt-ratio"     , required_argument , NULL , 'm' },
         { "num-retries"   , required_argument , NULL , 'r' },
         { "unit"          , required_argument , NULL , 'u' },
         { "verbose"       , no_argument       , NULL , 'v' },
@@ -101,7 +110,7 @@ void parse_args(int argc, char* argv[], ProgramArgs& args)
 
     char ch;
     // while ((ch = getopt_long(argc, argv, "d:t:n:r:m:o:i:a:u:h", longopts, NULL)) != -1) {
-    while ((ch = getopt_long(argc, argv, "d:t:r:w:u:hv", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "d:t:o:m:r:w:u:hv", longopts, NULL)) != -1) {
         switch (ch) {
         case 'd': // path to data set
             args.data_file = optarg;
@@ -113,6 +122,14 @@ void parse_args(int argc, char* argv[], ProgramArgs& args)
 
         case 't': // number of threads
             args.num_threads = std::stoull(optarg);
+            break;
+
+        case 'o': // number of threads
+            args.cpu_offset = std::stoull(optarg);
+            break;
+
+        case 'm': // number of threads
+            args.smt_ratio = std::stoull(optarg);
             break;
 
         case 'r': // number of times a transaction can be retried upon failure
@@ -152,7 +169,11 @@ bool validate_args(ProgramArgs& args)
         return false;
     }
     else if (args.num_threads < 1) {
-        std::cout << "error: spawning less than 1 threads is not allowed (see option -t)\n";
+        std::cout << "error: spawning less than 1 thread is not possible (see option -t)\n";
+        return false;
+    }
+    else if (args.smt_ratio < 1) {
+        std::cout << "error: each CPU should have at least one hardware thread (see option -m)\n";
         return false;
     }
     else if (args.unit != "s" && args.unit != "ms" && args.unit != "us" && args.unit != "ns") {
@@ -167,6 +188,8 @@ void print_args(ProgramArgs& args)
     std::cout << "data_file: " << args.data_file << std::endl;
     std::cout << "workload_file: " << args.workload_file << std::endl;
     std::cout << "num_threads: " << args.num_threads << std::endl;
+    std::cout << "cpu_offset: " << args.cpu_offset << std::endl;
+    std::cout << "smt_ratio: " << args.smt_ratio << std::endl;
     std::cout << "num_retries: " << args.num_retries << std::endl;
     std::cout << "unit: " << args.unit << std::endl;
 }

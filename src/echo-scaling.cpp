@@ -2,6 +2,7 @@
 #include <vector>   // std::vector
 #include <chrono>   // std::chrono::high_resolution_clock, std::chrono::duration
 #include <sstream>  // std::stringstream
+#include <cstddef>
 
 #include <sys/sysinfo.h>
 #include <pthread.h>
@@ -16,23 +17,13 @@ extern "C" {
 #include "kp_recovery.h"
 }
 
-// #define NUM_CPUS 2
-// #define CPU_OFFSET 0
-// #define RET_STRING_LEN 64
-// #define MASTER_EXPECTED_MAX_NO_KEYS 1024
-// #define LOCAL_EXPECTED_MAX_NO_KEYS 1024
-
 #include "utils.hpp"
 #include "opcode.hpp"
 #include "workload.hpp"
 
 namespace bench {
 
-enum {
-    NUM_CPUS = 4,
-    CPU_OFFSET = 0,
-    MAX_THREADS = 256
-};
+const std::size_t NUM_THREADS_MAX = 256;
 
 struct BenchThreadResult {
     std::size_t num_failures = 0;
@@ -50,9 +41,7 @@ struct BenchThreadArgs {
     unsigned id;
     cpu_set_t cpu_set;
     ProgramArgs* pargs;
-
     kp_kv_master* master;
-
     std::vector<KVPair>* pairs;
     tools::workload_t* workload;
     BenchThreadResult result;
@@ -67,13 +56,18 @@ void* worker_routine(void* arg)
     const auto master = worker_args->master;
     const auto pairs = worker_args->pairs;
     const auto time_unit = prog_args->unit;
-    // const auto num_retries_max = prog_args->num_retries;
+    const auto num_retries_max = prog_args->num_retries;
     const auto& workload = *worker_args->workload;
 
 
     kp_kv_local *local;
     // int rc = kp_kv_local_create(master, &local, LOCAL_EXPECTED_MAX_NO_KEYS, false);
     int rc = kp_kv_local_create(master, &local, pairs->size(), false);
+    if (rc) {
+        std::stringstream ss;
+        ss << "error: creating worker on thread " << id << " failed!\n";
+        std::cout << ss.str();
+    }
 
     std::string result;
 
@@ -97,7 +91,7 @@ void* worker_routine(void* arg)
     const std::size_t num_steps_max = workload.size() / prog_args->num_threads;
     const std::size_t begin = id * num_steps_max;
     const std::size_t end = begin + num_steps_max;
-    // std::size_t num_retries = 0;
+    std::size_t num_retries = 0;
 
     // ########################################################################
     // ## START ###############################################################
@@ -105,21 +99,10 @@ void* worker_routine(void* arg)
 
     const auto time_start = std::chrono::high_resolution_clock::now();
 
-    // if (prog_args->verbose) {
-    //     std::stringstream ss;
-    //     ss << "id = " << id << std::endl;
-    //     ss << "workload_size = " << workload.size() << std::endl;
-    //     ss << "num_steps_max = " << num_steps_max << std::endl;
-    //     ss << "begin = " << begin << std::endl;
-    //     ss << "end = " << end << std::endl;
-    //     std::cout << ss.str();
-    // }
-
     for (std::size_t step = begin; step < end; ) {
         const auto& workload_tx = workload[step];
 
         // begin transaction
-        // auto tx = store->begin();
         PM_START_TX();
 
         for (const auto& workload_cmd : workload_tx) {
@@ -130,10 +113,6 @@ void* worker_routine(void* arg)
             // perform operation
             switch (workload_cmd.opcode) {
             case tools::tx_opcode_t::Get:
-                // if (auto ret = store->read(tx, key, result); ret != midas::Store::OK) {
-                //     if (ret == midas::Store::VALUE_NOT_FOUND)
-                //         ++num_r_snapshot_misses;
-                // }
                 {
                     const char* key_ = key.c_str();
                     char* val_;
@@ -143,10 +122,6 @@ void* worker_routine(void* arg)
                 break;
 
             case tools::tx_opcode_t::Put:
-                // if (auto ret = store->write(tx, key, val); ret != midas::Store::OK) {
-                //     if (ret == midas::Store::VALUE_NOT_FOUND)
-                //         ++num_w_snapshot_misses;
-                // }
                 {
                     const char* key_ = key.c_str();
                     const char* val_ = val.c_str();
@@ -160,59 +135,34 @@ void* worker_routine(void* arg)
             }
         }
 
+        // commit transaction
         rc = kp_local_commit(local, NULL);
-        PM_END_TX();
-        ++step;
-
-        // Test if the current transaction has failed due to the previous operation
-        // if (tx->getStatus() == midas::Transaction::FAILED) {
-        //     ++num_failures;
-        //     if (num_retries_max) {
-        //         if (num_retries < num_retries_max) {
-        //             ++num_retries;
-        //         }
-        //         else {
-        //             num_retries = 0;
-        //             ++num_canceled_txs;
-        //             ++step;
-        //         }
-        //     }
-        //     else {
-        //         ++num_canceled_txs;
-        //         ++step;
-        //     }
-        // }
-        // else {
-        //     // commit transaction; increase error counters if necessary
-        //     const auto status = store->commit(tx);
-        //     if (status != midas::Store::OK) {
-        //         ++num_failures;
-        //         if (status == midas::Store::WW_CONFLICT)
-        //             ++num_ww_conflicts;
-        //         else if (status == midas::Store::RW_CONFLICT)
-        //             ++num_rw_conflicts;
-        //         else if (status == midas::Store::INVALID_TX)
-        //             ++num_invalid_txs;
-        //
-        //         if (num_retries_max) {
-        //             if (num_retries < num_retries_max) {
-        //                 ++num_retries;
-        //             }
-        //             else {
-        //                 num_retries = 0;
-        //                 ++num_canceled_txs;
-        //                 ++step;
-        //             }
-        //         }
-        //         else {
-        //             ++num_canceled_txs;
-        //             ++step;
-        //         }
-        //     }
-        //     else {
-        //         ++step;
-        //     }
-        // }
+        if (rc) {
+            if (prog_args->verbose) {
+                std::stringstream ss;
+                ss << "error: failed to commit transaction #" << step << " on thread " << id << "!\n";
+                std::cout << ss.str();
+            }
+            ++num_failures;
+            if (num_retries_max) {
+                if (num_retries < num_retries_max) {
+                    ++num_retries;
+                }
+                else {
+                    num_retries = 0;
+                    ++num_canceled_txs;
+                    ++step;
+                }
+            }
+            else {
+                ++num_canceled_txs;
+                ++step;
+            }
+        }
+        else {
+            PM_END_TX();
+            ++step;
+        }
     }
 
     const auto time_end = std::chrono::high_resolution_clock::now();
@@ -307,12 +257,15 @@ int run(ProgramArgs* pargs)
     int rc;
     int cpu;
     pthread_attr_t attr;
-    pthread_t threads[MAX_THREADS];
-    BenchThreadArgs thread_args[MAX_THREADS];
+    pthread_t threads[NUM_THREADS_MAX];
+    BenchThreadArgs thread_args[NUM_THREADS_MAX];
 
-    int cpu_count = get_nprocs();
-    std::cout << "physical cpus: " << (cpu_count / 2) << std::endl;
-    std::cout << "hyper threads: " << cpu_count << std::endl;
+    const auto cpu_offset = pargs->cpu_offset;
+    const auto num_cpus = get_nprocs() / pargs->smt_ratio;
+    std::cout << "physical cpus: " << num_cpus << std::endl;
+    std::cout << "logical cpus: " << (num_cpus * pargs->smt_ratio) << std::endl;
+
+    const auto time_bench_start = std::chrono::high_resolution_clock::now();
 
     for (std::size_t i = 0; i < pargs->num_threads; i++) {
 
@@ -329,7 +282,7 @@ int run(ProgramArgs* pargs)
 
         /* Setup CPU for everybody: don't spawn yet */
         // cpu = CPU_OFFSET + (i % NUM_CPUS);
-        cpu = CPU_OFFSET + (i % NUM_CPUS);
+        cpu = cpu_offset + (i % num_cpus);
         CPU_ZERO(&(thread_args[i].cpu_set));
         CPU_SET(cpu, &(thread_args[i].cpu_set));
 
@@ -358,6 +311,8 @@ int run(ProgramArgs* pargs)
             std::printf("pthread_join() returned error=%d\n", rc);
     }
 
+    const auto time_bench_end = std::chrono::high_resolution_clock::now();
+
     const auto time_unit = pargs->unit;
     std::size_t num_failures = 0;
     std::size_t num_rw_conflicts = 0;
@@ -366,8 +321,6 @@ int run(ProgramArgs* pargs)
     std::size_t num_w_snapshot_misses = 0;
     std::size_t num_invalid_txs = 0;
     std::size_t num_canceled_txs = 0;
-    std::chrono::high_resolution_clock::time_point glob_start;
-    std::chrono::high_resolution_clock::time_point glob_end;
     for (std::size_t i=0; i<pargs->num_threads; ++i) {
         if (pargs->verbose) {
             std::cout << "----------------------------------------\n";
@@ -391,16 +344,6 @@ int run(ProgramArgs* pargs)
         num_w_snapshot_misses += thread_args[i].result.num_w_snapshot_misses;
         num_invalid_txs += thread_args[i].result.num_invalid_txs;
         num_canceled_txs += thread_args[i].result.num_canceled_txs;
-        if (i == 0) {
-            glob_start = thread_args[i].result.start;
-            glob_end = thread_args[i].result.end;
-        }
-        else {
-            if (thread_args[i].result.start < glob_start)
-                glob_start = thread_args[i].result.start;
-            if (thread_args[i].result.end > glob_end)
-                glob_end = thread_args[i].result.end;
-        }
     }
 
     if (pargs->verbose) {
@@ -408,16 +351,16 @@ int run(ProgramArgs* pargs)
         std::cout << "summary" << '\n';
         std::cout << "----------------------------------------\n";
     }
-    const auto duration = convert_duration(glob_end - glob_start, time_unit);
-    std::cout << "time          = " << duration << ' ' << time_unit << std::endl;
-    std::cout << "failures      = " << num_failures << std::endl;
-    std::cout << "canceled      = " << num_canceled_txs << std::endl;
-    std::cout << "r snap misses = " << num_r_snapshot_misses << std::endl;
-    std::cout << "w snap misses = " << num_w_snapshot_misses << std::endl;
-    std::cout << "invalid txs   = " << num_invalid_txs << std::endl;
-    std::cout << "w/w conflicts = " << (num_ww_conflicts + num_w_snapshot_misses) << std::endl;
-    std::cout << "r/w conflicts = " << num_rw_conflicts << std::endl;
-    std::cout << "throughput    = " << ((workload.size() - num_canceled_txs) / duration) << "/" << time_unit << std::endl;
+    const auto duration = convert_duration(time_bench_end - time_bench_start, time_unit);
+    std::cout << "time=" << duration << ' ' << time_unit << std::endl;
+    std::cout << "failures=" << num_failures << std::endl;
+    std::cout << "canceled=" << num_canceled_txs << std::endl;
+    std::cout << "r snap misses=" << num_r_snapshot_misses << std::endl;
+    std::cout << "w snap misses=" << num_w_snapshot_misses << std::endl;
+    std::cout << "invalid txs= " << num_invalid_txs << std::endl;
+    std::cout << "ww conflicts= " << (num_ww_conflicts + num_w_snapshot_misses) << std::endl;
+    std::cout << "rw conflicts= " << num_rw_conflicts << std::endl;
+    std::cout << "throughput= " << ((workload.size() - num_canceled_txs) / duration) << "/" << time_unit << std::endl;
 
     // ########################################################################
     // Cleanup
@@ -429,7 +372,6 @@ int run(ProgramArgs* pargs)
     if(rc != 0)
         std::printf("pthread_attr_destroy() returned error=%d\n", rc);
 
-    // pop.close();
     return 0;
 }
 
