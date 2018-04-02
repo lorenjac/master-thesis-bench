@@ -223,7 +223,7 @@ void usage()
     std::cout << "\nOPTIONS\n";
     std::cout << "\t-d, --data FILE\n";
     std::cout << "\t\tPath to a file containing sample data pairs in CSV format. This parameter is required.\n";
-    std::cout << "\t-o, --output FILE\n";
+    std::cout << "\n\t-o, --output FILE\n";
     std::cout << "\t\tPath to file which will contain the generated workload. This parameter is required.\n";
     std::cout << "\n\t-p, --tx-profile FILE\n";
     std::cout << "\t\tPath to a file containing a transaction profile.\n";
