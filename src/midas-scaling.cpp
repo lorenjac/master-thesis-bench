@@ -272,8 +272,11 @@ int run(ProgramArgs* pargs)
 
     const auto cpu_offset = pargs->cpu_offset;
     const auto num_cpus = get_nprocs() / pargs->smt_ratio;
-    std::cout << "physical cpus: " << num_cpus << std::endl;
-    std::cout << "logical cpus: " << (num_cpus * pargs->smt_ratio) << std::endl;
+
+    if (pargs->verbose) {
+        std::cout << "physical cpus: " << num_cpus << std::endl;
+        std::cout << "logical cpus: " << (num_cpus * pargs->smt_ratio) << std::endl;
+    }
 
     const auto time_bench_start = std::chrono::high_resolution_clock::now();
 

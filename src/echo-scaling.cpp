@@ -59,7 +59,6 @@ void* worker_routine(void* arg)
     const auto num_retries_max = prog_args->num_retries;
     const auto& workload = *worker_args->workload;
 
-
     kp_kv_local *local;
     // int rc = kp_kv_local_create(master, &local, LOCAL_EXPECTED_MAX_NO_KEYS, false);
     int rc = kp_kv_local_create(master, &local, pairs->size(), false);
@@ -144,6 +143,7 @@ void* worker_routine(void* arg)
                 std::cout << ss.str();
             }
             ++num_failures;
+            ++num_ww_conflicts;
             if (num_retries_max) {
                 if (num_retries < num_retries_max) {
                     ++num_retries;
@@ -262,8 +262,11 @@ int run(ProgramArgs* pargs)
 
     const auto cpu_offset = pargs->cpu_offset;
     const auto num_cpus = get_nprocs() / pargs->smt_ratio;
-    std::cout << "physical cpus: " << num_cpus << std::endl;
-    std::cout << "logical cpus: " << (num_cpus * pargs->smt_ratio) << std::endl;
+
+    if (pargs->verbose) {
+        std::cout << "physical cpus: " << num_cpus << std::endl;
+        std::cout << "logical cpus: " << (num_cpus * pargs->smt_ratio) << std::endl;
+    }
 
     const auto time_bench_start = std::chrono::high_resolution_clock::now();
 
@@ -357,10 +360,10 @@ int run(ProgramArgs* pargs)
     std::cout << "canceled=" << num_canceled_txs << std::endl;
     std::cout << "r snap misses=" << num_r_snapshot_misses << std::endl;
     std::cout << "w snap misses=" << num_w_snapshot_misses << std::endl;
-    std::cout << "invalid txs= " << num_invalid_txs << std::endl;
-    std::cout << "ww conflicts= " << (num_ww_conflicts + num_w_snapshot_misses) << std::endl;
-    std::cout << "rw conflicts= " << num_rw_conflicts << std::endl;
-    std::cout << "throughput= " << ((workload.size() - num_canceled_txs) / duration) << "/" << time_unit << std::endl;
+    std::cout << "invalid txs=" << num_invalid_txs << std::endl;
+    std::cout << "ww conflicts=" << (num_ww_conflicts + num_w_snapshot_misses) << std::endl;
+    std::cout << "rw conflicts=" << num_rw_conflicts << std::endl;
+    std::cout << "throughput=" << ((workload.size() - num_canceled_txs) / duration) << "/" << time_unit << std::endl;
 
     // ########################################################################
     // Cleanup
