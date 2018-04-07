@@ -41,6 +41,8 @@ struct BenchThreadArgs {
     midas::Store* store;
     std::vector<KVPair>* pairs;
     tools::workload_t* workload;
+    std::size_t pos_begin;
+    std::size_t pos_end;
     BenchThreadResult result;
 };
 
@@ -81,6 +83,21 @@ void* worker_routine(void* arg)
     const auto time_unit = prog_args->unit;
     const auto num_retries_max = prog_args->num_retries;
     const auto& workload = *worker_args->workload;
+    const auto pos_begin = worker_args->pos_begin;
+    const auto pos_end = worker_args->pos_end;
+
+    if (prog_args->verbose) {
+        std::stringstream ss;
+        auto cpu = sched_getcpu();
+        ss << "worker " << id << " runs on core " << cpu << std::endl;
+        std::cout << ss.str();
+    }
+
+    if (prog_args->verbose) {
+        std::stringstream ss;
+        ss << "worker " << id << " has workload range [" << pos_begin << "-" << pos_end << ")" << std::endl;
+        std::cout << ss.str();
+    }
 
     std::string result;
 
@@ -92,13 +109,7 @@ void* worker_routine(void* arg)
     std::size_t num_w_snapshot_misses = 0;
     std::size_t num_invalid_txs = 0;
     std::size_t num_canceled_txs = 0;
-
-    if (prog_args->verbose) {
-        std::stringstream ss;
-        auto cpu = sched_getcpu();
-        ss << "worker " << id << " runs on core " << cpu << std::endl;
-        std::cout << ss.str();
-    }
+    std::size_t num_retries = 0;
 
     // ########################################################################
     // ## START ###############################################################
@@ -106,13 +117,7 @@ void* worker_routine(void* arg)
 
     const auto time_start = std::chrono::high_resolution_clock::now();
 
-    // FIXME division remainder may be lost here
-    const std::size_t num_steps_max = workload.size() / prog_args->num_threads;
-    const std::size_t begin = id * num_steps_max;
-    const std::size_t end = begin + num_steps_max;
-
-    std::size_t num_retries = 0;
-    for (std::size_t step = begin; step < end; ) {
+    for (std::size_t step = pos_begin; step < pos_end; ) {
         const auto& workload_tx = workload[step];
 
         // begin transaction
@@ -278,6 +283,17 @@ int run(ProgramArgs* pargs)
         std::cout << "logical cpus: " << (num_cpus * pargs->smt_ratio) << std::endl;
     }
 
+    // Compute absolute number of steps performed by each worker
+    const std::size_t num_steps_each = workload.size() / pargs->num_threads;
+
+    // Compute remainder if workload size is not evenly divisible by number of
+    // threads. This value is reduced as it is distributed over all threads in
+    // a round-robin manner to compensate for the gap
+    std::size_t num_steps_carry = workload.size() % pargs->num_threads;
+
+    // Current starting step
+    std::size_t step = 0;
+
     const auto time_bench_start = std::chrono::high_resolution_clock::now();
 
     for (std::size_t i = 0; i < pargs->num_threads; i++) {
@@ -286,6 +302,17 @@ int run(ProgramArgs* pargs)
         thread_args[i].pairs = &pairs;
         thread_args[i].workload = &workload;
         thread_args[i].id = i;
+
+        // Compute and assign workload range for the current worker
+        thread_args[i].pos_begin = step;
+        thread_args[i].pos_end = step + num_steps_each;
+        std::cout << "num_steps_carry: " << num_steps_carry << std::endl;
+        if (num_steps_carry) {
+            std::cout << "reducing carry..." << std::endl;
+            ++thread_args[i].pos_end;
+            --num_steps_carry;
+        }
+        step = thread_args[i].pos_end;
 
         /* Create Attributes */
         rc = pthread_attr_init(&attr);

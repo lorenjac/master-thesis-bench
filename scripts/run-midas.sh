@@ -23,6 +23,7 @@ do
         echo "--------------------------------" >> $folder/midas-$sc_name-$n.log
         echo "num_threads=$n" >> $folder/midas-$sc_name-$n.log
         rm -f /dev/shm/nvdimm_midas && PMEM_IS_PMEM_FORCE=1 ./bin/midas-scaling --data $data_file --workload $workload_file --num-threads $n >> $folder/midas-$sc_name-$n.log
+        #PMEM_IS_PMEM_FORCE=1 ./bin/midas-scaling --data $data_file --workload $workload_file --num-threads $n --num-retries 3 >> $folder/midas-$sc_name-$n.log
         echo "done!"
     done
 done
