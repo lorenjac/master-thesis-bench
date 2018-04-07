@@ -306,9 +306,7 @@ int run(ProgramArgs* pargs)
         // Compute and assign workload range for the current worker
         thread_args[i].pos_begin = step;
         thread_args[i].pos_end = step + num_steps_each;
-        std::cout << "num_steps_carry: " << num_steps_carry << std::endl;
         if (num_steps_carry) {
-            std::cout << "reducing carry..." << std::endl;
             ++thread_args[i].pos_end;
             --num_steps_carry;
         }
