@@ -3,8 +3,8 @@ val_len=1024
 num_txs=1000
 short_min=2
 short_max=32
-long_min=32
-long_max=512
+long_min=64
+long_max=256
 
 # build key-value generator if necessary
 if [ ! -d "bin/kv-gen" ]; then
