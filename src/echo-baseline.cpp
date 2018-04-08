@@ -60,6 +60,23 @@ typedef struct benchmark_args_struct {
     // random_ints *ints;
 } benchmark_thread_args;
 
+/**
+ * Prevent reordering of instructions even if implementation is known.
+ *
+ * Surround non-reordered code with each one call to this function.
+ * The first one receives an input parameter of the code, the second
+ * receives a return value of the code. If timing is required, put
+ * that before the first call and after the last call of the same
+ * context.
+ *
+ * For more information see: 
+ *   https://stackoverflow.com/questions/37786547/enforcing-statement-order-in-c
+ */
+template <class T>
+__attribute__((always_inline)) inline void DoNotOptimize(const T &value) {
+      asm volatile("" : "+m"(const_cast<T &>(value)));
+}
+
 std::vector<kvpair_t> fetch_data(std::string path)
 {
     std::ifstream ifs{path};
@@ -122,14 +139,17 @@ void measure_populated_store(kp_kv_local *local, benchmark_thread_args* thread_a
             const char* key = _key.c_str();
             char* val;
             std::size_t siz;
-            auto start = std::chrono::high_resolution_clock::now();
+
+            const auto start = std::chrono::high_resolution_clock::now();
+            DoNotOptimize(local); 
             rc = kp_local_get(local, key, (void**)&val, &siz);
             (void)rc;
-            auto end = std::chrono::high_resolution_clock::now();
+            DoNotOptimize(rc); 
+            const auto end = std::chrono::high_resolution_clock::now();
+
             latencies.emplace_back(end - start);
 
             // FIXME produces a memory leak: 'val' is never free'ed before going out of scope (which heap is it on???)
-            // TODO figure out when to commit {never, always, once, ...}
         }
     }
     else if (opcode == "put") {
@@ -146,39 +166,21 @@ void measure_populated_store(kp_kv_local *local, benchmark_thread_args* thread_a
             const char* val = _val.c_str();
             const std::size_t siz = _val.size();
 
-            auto start = std::chrono::high_resolution_clock::now();
+            const auto start = std::chrono::high_resolution_clock::now();
+            DoNotOptimize(local); 
             rc = kp_local_put(local, key, val, siz);
             (void)rc;
-            auto end = std::chrono::high_resolution_clock::now();
-            latencies.emplace_back(end - start);
+            DoNotOptimize(rc);
+            const auto end = std::chrono::high_resolution_clock::now();
 
-            // TODO figure out when to commit {never, always, once, ...}
+            latencies.emplace_back(end - start);
         }
     }
     else if (opcode == "ins") {
-        // TODO do I need this?
+        // TODO not really required (not used in throughput benchmark) 
     }
     else if (opcode == "del") {
-        int rc;
-        for (size_t i=0; i<num_repeats; ++i) {
-            const auto& [_key, _val] = pairs[dist(rng)];
-            (void)_val;
-            if (thread_args->pargs->verbose) {
-                std::cout << "put(\n";
-                std::cout << "\tkey = " << _key << '\n';
-                std::cout << "\tval = " << _val << '\n';
-                std::cout << ")\n";
-            }
-            const char* key = _key.c_str();
-
-            auto start = std::chrono::high_resolution_clock::now();
-            rc = kp_local_delete_key(local, key);
-            (void)rc;
-            auto end = std::chrono::high_resolution_clock::now();
-            latencies.emplace_back(end - start);
-
-            // TODO figure out when to commit {never, always, once, ...}
-        }
+        // TODO not really required (not used in throughput benchmark) 
     }
 
     // // Starting a transaction
@@ -223,9 +225,8 @@ void evaluate(benchmark_thread_args* thread_args, const std::vector<std::chrono:
             std::cout << std::setw(index_width) << std::setfill('0') << i;
             std::cout << ": " << convert_duration(latencies[i], unit) << unit << std::endl;
         }
+        std::cout << "--------------------------------------------------\n";
     }
-
-    std::cout << "--------------------------------------------------\n";
 
     auto min = std::min_element(std::begin(latencies), std::end(latencies));
     auto max = std::max_element(std::begin(latencies), std::end(latencies));
@@ -413,7 +414,7 @@ void usage()
     std::cout << "\tget\n";
     std::cout << "\t\tRetrieval.\n";
     std::cout << "\tdel\n";
-    std::cout << "\t\tDeletion.\n";
+    std::cout << "\t\tDeletion (currently not supported).\n";
     std::cout << "\nOPTIONS\n";
     std::cout << "\t-p, --populate FILE\n";
     std::cout << "\t\tPopulates the database with data from the specified file.\n";
@@ -496,11 +497,11 @@ void print_args(program_args& pargs)
 
 int main(int argc, char* argv[])
 {
-#ifdef FLUSH_IT
-    std::cout << "flushing: enabled" << std::endl;
-#else
-    std::cout << "flushing: disabled" << std::endl;
-#endif
+//#ifdef FLUSH_IT
+//    std::cout << "flushing: enabled" << std::endl;
+//#else
+//    std::cout << "flushing: disabled" << std::endl;
+//#endif
 
     if (argc < 2) {
         usage();
@@ -509,7 +510,8 @@ int main(int argc, char* argv[])
 
     program_args pargs;
     parse_args(argc, argv, pargs);
-    print_args(pargs);
+    if (pargs.verbose)
+        print_args(pargs);
     run(&pargs);
 
     return 0;

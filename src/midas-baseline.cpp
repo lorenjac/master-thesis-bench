@@ -43,6 +43,23 @@ struct BenchThreadArgs {
     std::vector<KVPair>* pairs;
 };
 
+/**
+ * Prevent reordering of instructions even if implementation is known.
+ *
+ * Surround non-reordered code with each one call to this function.
+ * The first one receives an input parameter of the code, the second
+ * receives a return value of the code. If timing is required, put
+ * that before the first call and after the last call of the same
+ * context.
+ *
+ * For more information see: 
+ *   https://stackoverflow.com/questions/37786547/enforcing-statement-order-in-c
+ */
+template <class T>
+__attribute__((always_inline)) inline void DoNotOptimize(const T &value) {
+      asm volatile("" : "+m"(const_cast<T &>(value)));
+}
+
 std::vector<KVPair> fetch_data(const std::string& path)
 {
     std::ifstream ifs{path};
@@ -102,9 +119,12 @@ void measure_populated_store(BenchThreadArgs* thread_args, std::vector<std::chro
             std::string result;
             (void)result;
 
-            auto start = std::chrono::high_resolution_clock::now();
-            store->read(tx, key, result);
-            auto end = std::chrono::high_resolution_clock::now();
+            const auto start = std::chrono::high_resolution_clock::now();
+            DoNotOptimize(key);
+            const auto rc = store->read(tx, key, result);
+            DoNotOptimize(rc);
+            const auto end = std::chrono::high_resolution_clock::now();
+
             latencies.emplace_back(end - start);
         }
         store->commit(tx);
@@ -120,33 +140,21 @@ void measure_populated_store(BenchThreadArgs* thread_args, std::vector<std::chro
                 std::cout << ")\n";
             }
 
-            auto start = std::chrono::high_resolution_clock::now();
-            store->write(tx, key, val);
-            auto end = std::chrono::high_resolution_clock::now();
+            const auto start = std::chrono::high_resolution_clock::now();
+            DoNotOptimize(key);
+            const auto rc = store->write(tx, key, val);
+            DoNotOptimize(rc);
+            const auto end = std::chrono::high_resolution_clock::now();
+
             latencies.emplace_back(end - start);
         }
         store->commit(tx);
     }
     else if (opcode == "ins") {
-        // TODO do I need this?
+        // TODO not really required (not used in throughput benchmark)
     }
     else if (opcode == "del") {
-        auto tx = store->begin();
-        for (size_t i=0; i<num_repeats; ++i) {
-            const auto& [key, val] = pairs[dist(rng)];
-            (void)val;
-            if (verbose) {
-                std::cout << "del(\n";
-                std::cout << "\tkey = " << key << '\n';
-                std::cout << ")\n";
-            }
-
-            auto start = std::chrono::high_resolution_clock::now();
-            store->drop(tx, key);
-            auto end = std::chrono::high_resolution_clock::now();
-            latencies.emplace_back(end - start);
-        }
-        store->commit(tx);
+        // TODO not really required (not used in throughput benchmark)
     }
 }
 
@@ -351,7 +359,7 @@ void usage()
     std::cout << "\tget\n";
     std::cout << "\t\tRetrieval.\n";
     std::cout << "\tdel\n";
-    std::cout << "\t\tDeletion.\n";
+    std::cout << "\t\tDeletion (currently not supported).\n";
     std::cout << "\nOPTIONS\n";
     std::cout << "\t-p, --populate FILE\n";
     std::cout << "\t\tPopulates the database with data from the specified file.\n";
