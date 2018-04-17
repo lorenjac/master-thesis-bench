@@ -141,10 +141,10 @@ void* worker_routine(void* arg)
 
         // commit transaction
         rc = kp_local_commit(local, NULL);
-        if (rc) {
+        if (rc == 1) {
             if (prog_args->verbose) {
                 std::stringstream ss;
-                ss << "error: failed to commit transaction #" << step << " on thread " << id << "!\n";
+                ss << "error: conflict during commit of transaction #" << step << " on thread " << id << " (rc=" << rc << ")" << "!\n";
                 std::cout << ss.str();
             }
             ++num_failures;
@@ -164,7 +164,13 @@ void* worker_routine(void* arg)
                 ++step;
             }
         }
-        else {
+        else if (rc == -1) {
+            std::stringstream ss;
+            ss << "error: error during commit of transaction #" << step << " on thread " << id << " (rc=" << rc << ")" << "!\n";
+            std::cout << ss.str();
+            exit(1);
+        }
+        else { // 0 = success, 2 = empty commit (read only tx)
             PM_END_TX();
             ++step;
         }

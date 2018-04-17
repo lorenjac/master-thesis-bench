@@ -10,10 +10,10 @@ work_large_long=assets/workloads/ll-1000.json
 num_threads_max=32
 num_runs=10
 
-bash scripts/run-midas.sh ss $data_small $work_small_short $num_threads_max $num_runs
-bash scripts/run-midas.sh sl $data_small $work_small_long $num_threads_max $num_runs
-bash scripts/run-midas.sh ls $data_large $work_large_short $num_threads_max $num_runs
-bash scripts/run-midas.sh ll $data_large $work_large_long $num_threads_max $num_runs
+#bash scripts/run-midas.sh ss $data_small $work_small_short $num_threads_max $num_runs
+#bash scripts/run-midas.sh sl $data_small $work_small_long $num_threads_max $num_runs
+#bash scripts/run-midas.sh ls $data_large $work_large_short $num_threads_max $num_runs
+#bash scripts/run-midas.sh ll $data_large $work_large_long $num_threads_max $num_runs
 
 bash scripts/run-echo.sh ss $data_small $work_small_short $num_threads_max $num_runs
 bash scripts/run-echo.sh sl $data_small $work_small_long $num_threads_max $num_runs
