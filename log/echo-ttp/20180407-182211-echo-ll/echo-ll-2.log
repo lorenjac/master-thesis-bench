@@ -1,0 +1,110 @@
+--------------------------------
+num_threads=2
+time=1.55943 s
+failures=7
+canceled=1
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=7
+rw conflicts=0
+throughput=640.618/s
+--------------------------------
+num_threads=2
+time=1.51988 s
+failures=4
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=4
+rw conflicts=0
+throughput=657.949/s
+--------------------------------
+num_threads=2
+time=1.54171 s
+failures=6
+canceled=1
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=6
+rw conflicts=0
+throughput=647.982/s
+--------------------------------
+num_threads=2
+time=1.54129 s
+failures=5
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=5
+rw conflicts=0
+throughput=648.808/s
+--------------------------------
+num_threads=2
+time=1.54182 s
+failures=7
+canceled=1
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=7
+rw conflicts=0
+throughput=647.935/s
+--------------------------------
+num_threads=2
+time=1.53391 s
+failures=4
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=4
+rw conflicts=0
+throughput=651.928/s
+--------------------------------
+num_threads=2
+time=1.55524 s
+failures=7
+canceled=1
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=7
+rw conflicts=0
+throughput=642.343/s
+--------------------------------
+num_threads=2
+time=1.55088 s
+failures=5
+canceled=1
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=5
+rw conflicts=0
+throughput=644.15/s
+--------------------------------
+num_threads=2
+time=1.55041 s
+failures=4
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=4
+rw conflicts=0
+throughput=644.99/s
+--------------------------------
+num_threads=2
+time=1.53793 s
+failures=4
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=4
+rw conflicts=0
+throughput=650.223/s

@@ -1,0 +1,120 @@
+--------------------------------
+num_threads=2
+index locking: no
+time=0.0683479 s
+failures=127
+canceled=31
+r snap misses=0
+w snap misses=23
+invalid txs=0
+ww conflicts=23
+rw conflicts=104
+throughput=14177.5/s
+--------------------------------
+num_threads=2
+index locking: no
+time=0.091928 s
+failures=127
+canceled=31
+r snap misses=0
+w snap misses=22
+invalid txs=0
+ww conflicts=22
+rw conflicts=105
+throughput=10540.9/s
+--------------------------------
+num_threads=2
+index locking: no
+time=0.0722139 s
+failures=110
+canceled=27
+r snap misses=0
+w snap misses=10
+invalid txs=0
+ww conflicts=10
+rw conflicts=100
+throughput=13473.9/s
+--------------------------------
+num_threads=2
+index locking: no
+time=0.0920176 s
+failures=91
+canceled=22
+r snap misses=0
+w snap misses=14
+invalid txs=0
+ww conflicts=14
+rw conflicts=77
+throughput=10628.4/s
+--------------------------------
+num_threads=2
+index locking: no
+time=0.0885861 s
+failures=126
+canceled=31
+r snap misses=0
+w snap misses=16
+invalid txs=0
+ww conflicts=16
+rw conflicts=110
+throughput=10938.5/s
+--------------------------------
+num_threads=2
+index locking: no
+time=0.0689344 s
+failures=121
+canceled=29
+r snap misses=0
+w snap misses=10
+invalid txs=0
+ww conflicts=10
+rw conflicts=111
+throughput=14085.9/s
+--------------------------------
+num_threads=2
+index locking: no
+time=0.0896344 s
+failures=112
+canceled=28
+r snap misses=0
+w snap misses=27
+invalid txs=0
+ww conflicts=27
+rw conflicts=85
+throughput=10844/s
+--------------------------------
+num_threads=2
+index locking: no
+time=0.09144 s
+failures=87
+canceled=21
+r snap misses=0
+w snap misses=13
+invalid txs=0
+ww conflicts=13
+rw conflicts=74
+throughput=10706.5/s
+--------------------------------
+num_threads=2
+index locking: no
+time=0.0880716 s
+failures=106
+canceled=26
+r snap misses=0
+w snap misses=24
+invalid txs=0
+ww conflicts=24
+rw conflicts=82
+throughput=11059.2/s
+--------------------------------
+num_threads=2
+index locking: no
+time=0.0877202 s
+failures=130
+canceled=32
+r snap misses=0
+w snap misses=42
+invalid txs=0
+ww conflicts=42
+rw conflicts=88
+throughput=11035.1/s

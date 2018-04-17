@@ -1,0 +1,120 @@
+--------------------------------
+num_threads=4
+index locking: no
+time=0.0373704 s
+failures=334
+canceled=83
+r snap misses=0
+w snap misses=61
+invalid txs=0
+ww conflicts=61
+rw conflicts=273
+throughput=24538.1/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.0358611 s
+failures=342
+canceled=85
+r snap misses=2
+w snap misses=61
+invalid txs=0
+ww conflicts=61
+rw conflicts=279
+throughput=25515.1/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.049987 s
+failures=303
+canceled=75
+r snap misses=1
+w snap misses=54
+invalid txs=0
+ww conflicts=54
+rw conflicts=248
+throughput=18504.8/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.0386999 s
+failures=326
+canceled=80
+r snap misses=0
+w snap misses=72
+invalid txs=0
+ww conflicts=72
+rw conflicts=254
+throughput=23772.7/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.0358642 s
+failures=361
+canceled=88
+r snap misses=1
+w snap misses=84
+invalid txs=0
+ww conflicts=84
+rw conflicts=276
+throughput=25429.2/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.0321084 s
+failures=314
+canceled=77
+r snap misses=0
+w snap misses=61
+invalid txs=0
+ww conflicts=61
+rw conflicts=253
+throughput=28746.4/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.0469163 s
+failures=284
+canceled=71
+r snap misses=0
+w snap misses=48
+invalid txs=0
+ww conflicts=48
+rw conflicts=236
+throughput=19801.2/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.0515455 s
+failures=333
+canceled=82
+r snap misses=0
+w snap misses=76
+invalid txs=0
+ww conflicts=76
+rw conflicts=257
+throughput=17809.5/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.0504087 s
+failures=319
+canceled=79
+r snap misses=0
+w snap misses=52
+invalid txs=0
+ww conflicts=52
+rw conflicts=267
+throughput=18270.6/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.0392016 s
+failures=334
+canceled=82
+r snap misses=0
+w snap misses=49
+invalid txs=0
+ww conflicts=49
+rw conflicts=285
+throughput=23417.4/s

@@ -1,0 +1,120 @@
+--------------------------------
+num_threads=2
+index locking: yes
+time=0.10932 s
+failures=113
+canceled=28
+r snap misses=1
+w snap misses=21
+invalid txs=0
+ww conflicts=21
+rw conflicts=91
+throughput=8891.35/s
+--------------------------------
+num_threads=2
+index locking: yes
+time=0.105268 s
+failures=116
+canceled=29
+r snap misses=0
+w snap misses=36
+invalid txs=0
+ww conflicts=36
+rw conflicts=80
+throughput=9224.06/s
+--------------------------------
+num_threads=2
+index locking: yes
+time=0.0849351 s
+failures=104
+canceled=25
+r snap misses=0
+w snap misses=15
+invalid txs=0
+ww conflicts=15
+rw conflicts=89
+throughput=11479.3/s
+--------------------------------
+num_threads=2
+index locking: yes
+time=0.110317 s
+failures=99
+canceled=24
+r snap misses=1
+w snap misses=15
+invalid txs=0
+ww conflicts=15
+rw conflicts=83
+throughput=8847.24/s
+--------------------------------
+num_threads=2
+index locking: yes
+time=0.0866292 s
+failures=95
+canceled=23
+r snap misses=0
+w snap misses=14
+invalid txs=0
+ww conflicts=14
+rw conflicts=81
+throughput=11277.9/s
+--------------------------------
+num_threads=2
+index locking: yes
+time=0.075877 s
+failures=77
+canceled=19
+r snap misses=0
+w snap misses=22
+invalid txs=0
+ww conflicts=22
+rw conflicts=55
+throughput=12928.8/s
+--------------------------------
+num_threads=2
+index locking: yes
+time=0.0753683 s
+failures=129
+canceled=32
+r snap misses=0
+w snap misses=33
+invalid txs=0
+ww conflicts=33
+rw conflicts=96
+throughput=12843.6/s
+--------------------------------
+num_threads=2
+index locking: yes
+time=0.0765502 s
+failures=114
+canceled=28
+r snap misses=0
+w snap misses=17
+invalid txs=0
+ww conflicts=17
+rw conflicts=97
+throughput=12697.5/s
+--------------------------------
+num_threads=2
+index locking: yes
+time=0.108436 s
+failures=141
+canceled=35
+r snap misses=0
+w snap misses=15
+invalid txs=0
+ww conflicts=15
+rw conflicts=126
+throughput=8899.25/s
+--------------------------------
+num_threads=2
+index locking: yes
+time=0.107385 s
+failures=101
+canceled=25
+r snap misses=1
+w snap misses=30
+invalid txs=0
+ww conflicts=30
+rw conflicts=70
+throughput=9079.45/s

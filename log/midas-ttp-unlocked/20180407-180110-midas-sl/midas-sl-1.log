@@ -1,0 +1,120 @@
+--------------------------------
+num_threads=1
+index locking: no
+time=1.03663 s
+failures=0
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=0
+throughput=964.667/s
+--------------------------------
+num_threads=1
+index locking: no
+time=0.946022 s
+failures=0
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=0
+throughput=1057.06/s
+--------------------------------
+num_threads=1
+index locking: no
+time=1.01491 s
+failures=0
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=0
+throughput=985.308/s
+--------------------------------
+num_threads=1
+index locking: no
+time=1.02618 s
+failures=0
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=0
+throughput=974.488/s
+--------------------------------
+num_threads=1
+index locking: no
+time=1.03746 s
+failures=0
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=0
+throughput=963.891/s
+--------------------------------
+num_threads=1
+index locking: no
+time=0.950253 s
+failures=0
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=0
+throughput=1052.35/s
+--------------------------------
+num_threads=1
+index locking: no
+time=1.01509 s
+failures=0
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=0
+throughput=985.133/s
+--------------------------------
+num_threads=1
+index locking: no
+time=1.0306 s
+failures=0
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=0
+throughput=970.306/s
+--------------------------------
+num_threads=1
+index locking: no
+time=1.03669 s
+failures=0
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=0
+throughput=964.609/s
+--------------------------------
+num_threads=1
+index locking: no
+time=0.941097 s
+failures=0
+canceled=0
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=0
+throughput=1062.59/s

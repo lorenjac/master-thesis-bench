@@ -1,0 +1,120 @@
+--------------------------------
+num_threads=4
+index locking: no
+time=0.372671 s
+failures=251
+canceled=61
+r snap misses=0
+w snap misses=38
+invalid txs=0
+ww conflicts=38
+rw conflicts=213
+throughput=2519.65/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.367772 s
+failures=245
+canceled=60
+r snap misses=0
+w snap misses=54
+invalid txs=0
+ww conflicts=54
+rw conflicts=191
+throughput=2555.93/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.369509 s
+failures=236
+canceled=57
+r snap misses=0
+w snap misses=48
+invalid txs=0
+ww conflicts=48
+rw conflicts=188
+throughput=2552.04/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.370813 s
+failures=274
+canceled=67
+r snap misses=0
+w snap misses=55
+invalid txs=0
+ww conflicts=55
+rw conflicts=219
+throughput=2516.09/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.368657 s
+failures=236
+canceled=58
+r snap misses=0
+w snap misses=56
+invalid txs=0
+ww conflicts=56
+rw conflicts=180
+throughput=2555.22/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.370454 s
+failures=309
+canceled=76
+r snap misses=0
+w snap misses=49
+invalid txs=0
+ww conflicts=49
+rw conflicts=260
+throughput=2494.23/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.405543 s
+failures=248
+canceled=61
+r snap misses=0
+w snap misses=43
+invalid txs=0
+ww conflicts=43
+rw conflicts=205
+throughput=2315.41/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.305399 s
+failures=249
+canceled=61
+r snap misses=0
+w snap misses=44
+invalid txs=0
+ww conflicts=44
+rw conflicts=205
+throughput=3074.66/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.369422 s
+failures=253
+canceled=63
+r snap misses=0
+w snap misses=35
+invalid txs=0
+ww conflicts=35
+rw conflicts=218
+throughput=2536.39/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.3699 s
+failures=256
+canceled=62
+r snap misses=1
+w snap misses=56
+invalid txs=0
+ww conflicts=56
+rw conflicts=199
+throughput=2535.82/s

@@ -1,0 +1,110 @@
+--------------------------------
+num_threads=4
+index locking: no
+time=0.254491 s
+failures=3540
+canceled=884
+r snap misses=0
+w snap misses=2088
+invalid txs=0
+ww conflicts=2088
+rw conflicts=1452
+throughput=455.812/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.201107 s
+failures=3550
+canceled=886
+r snap misses=0
+w snap misses=2080
+invalid txs=0
+ww conflicts=2080
+rw conflicts=1470
+throughput=566.864/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.201643 s
+failures=3585
+canceled=895
+r snap misses=1
+w snap misses=2167
+invalid txs=0
+ww conflicts=2167
+rw conflicts=1417
+throughput=520.721/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.25794 s
+failures=3563
+canceled=890
+r snap misses=1
+w snap misses=2156
+invalid txs=0
+ww conflicts=2156
+rw conflicts=1406
+throughput=426.456/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.252808 s
+failures=3598
+canceled=899
+r snap misses=0
+w snap misses=2170
+invalid txs=0
+ww conflicts=2170
+rw conflicts=1428
+throughput=399.512/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.250364 s
+failures=3603
+canceled=900
+r snap misses=1
+w snap misses=2147
+invalid txs=0
+ww conflicts=2147
+rw conflicts=1455
+throughput=399.419/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.20321 s
+failures=3563
+canceled=890
+r snap misses=0
+w snap misses=2092
+invalid txs=0
+ww conflicts=2092
+rw conflicts=1471
+throughput=541.311/s
+--------------------------------
+num_threads=4
+--------------------------------
+num_threads=4
+index locking: no
+time=0.252783 s
+failures=3466
+canceled=865
+r snap misses=1
+w snap misses=2073
+invalid txs=0
+ww conflicts=2073
+rw conflicts=1392
+throughput=534.054/s
+--------------------------------
+num_threads=4
+index locking: no
+time=0.194811 s
+failures=3568
+canceled=891
+r snap misses=1
+w snap misses=2156
+invalid txs=0
+ww conflicts=2156
+rw conflicts=1411
+throughput=559.517/s

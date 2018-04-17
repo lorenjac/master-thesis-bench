@@ -1,0 +1,120 @@
+--------------------------------
+num_threads=16
+index locking: no
+time=0.0736102 s
+failures=3968
+canceled=992
+r snap misses=0
+w snap misses=3358
+invalid txs=0
+ww conflicts=3358
+rw conflicts=610
+throughput=108.681/s
+--------------------------------
+num_threads=16
+index locking: no
+time=0.0561989 s
+failures=3967
+canceled=991
+r snap misses=1
+w snap misses=3463
+invalid txs=0
+ww conflicts=3463
+rw conflicts=503
+throughput=160.145/s
+--------------------------------
+num_threads=16
+index locking: no
+time=0.0660326 s
+failures=3981
+canceled=995
+r snap misses=0
+w snap misses=3434
+invalid txs=0
+ww conflicts=3434
+rw conflicts=547
+throughput=75.7202/s
+--------------------------------
+num_threads=16
+index locking: no
+time=0.0782411 s
+failures=3967
+canceled=991
+r snap misses=0
+w snap misses=3340
+invalid txs=0
+ww conflicts=3340
+rw conflicts=627
+throughput=115.029/s
+--------------------------------
+num_threads=16
+index locking: no
+time=0.0697134 s
+failures=3967
+canceled=991
+r snap misses=0
+w snap misses=3368
+invalid txs=0
+ww conflicts=3368
+rw conflicts=599
+throughput=129.1/s
+--------------------------------
+num_threads=16
+index locking: no
+time=0.0669542 s
+failures=3970
+canceled=992
+r snap misses=0
+w snap misses=3367
+invalid txs=0
+ww conflicts=3367
+rw conflicts=603
+throughput=119.485/s
+--------------------------------
+num_threads=16
+index locking: no
+time=0.0693418 s
+failures=3976
+canceled=994
+r snap misses=0
+w snap misses=3432
+invalid txs=0
+ww conflicts=3432
+rw conflicts=544
+throughput=86.5279/s
+--------------------------------
+num_threads=16
+index locking: no
+time=0.0757885 s
+failures=3966
+canceled=991
+r snap misses=0
+w snap misses=3402
+invalid txs=0
+ww conflicts=3402
+rw conflicts=564
+throughput=118.752/s
+--------------------------------
+num_threads=16
+index locking: no
+time=0.066728 s
+failures=3978
+canceled=994
+r snap misses=0
+w snap misses=3367
+invalid txs=0
+ww conflicts=3367
+rw conflicts=611
+throughput=89.9173/s
+--------------------------------
+num_threads=16
+index locking: no
+time=0.0696371 s
+failures=3978
+canceled=993
+r snap misses=0
+w snap misses=3448
+invalid txs=0
+ww conflicts=3448
+rw conflicts=530
+throughput=100.521/s

@@ -1,0 +1,120 @@
+--------------------------------
+num_threads=32
+index locking: no
+time=0.0331694 s
+failures=19
+canceled=4
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=19
+throughput=30027.7/s
+--------------------------------
+num_threads=32
+index locking: no
+time=0.0404833 s
+failures=22
+canceled=4
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=22
+throughput=24602.7/s
+--------------------------------
+num_threads=32
+index locking: no
+time=0.0440657 s
+failures=31
+canceled=6
+r snap misses=0
+w snap misses=4
+invalid txs=0
+ww conflicts=4
+rw conflicts=27
+throughput=22557.2/s
+--------------------------------
+num_threads=32
+index locking: no
+time=0.0421724 s
+failures=19
+canceled=1
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=19
+throughput=23688.5/s
+--------------------------------
+num_threads=32
+index locking: no
+time=0.0472343 s
+failures=17
+canceled=2
+r snap misses=0
+w snap misses=2
+invalid txs=0
+ww conflicts=2
+rw conflicts=15
+throughput=21128.7/s
+--------------------------------
+num_threads=32
+index locking: no
+time=0.0447212 s
+failures=23
+canceled=5
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=23
+throughput=22249/s
+--------------------------------
+num_threads=32
+index locking: no
+time=0.0425557 s
+failures=20
+canceled=4
+r snap misses=0
+w snap misses=4
+invalid txs=0
+ww conflicts=4
+rw conflicts=16
+throughput=23404.6/s
+--------------------------------
+num_threads=32
+index locking: no
+time=0.0465749 s
+failures=21
+canceled=3
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=21
+throughput=21406.4/s
+--------------------------------
+num_threads=32
+index locking: no
+time=0.0441435 s
+failures=25
+canceled=2
+r snap misses=0
+w snap misses=0
+invalid txs=0
+ww conflicts=0
+rw conflicts=25
+throughput=22608.1/s
+--------------------------------
+num_threads=32
+index locking: no
+time=0.0433941 s
+failures=20
+canceled=3
+r snap misses=0
+w snap misses=4
+invalid txs=0
+ww conflicts=4
+rw conflicts=16
+throughput=22975.5/s
